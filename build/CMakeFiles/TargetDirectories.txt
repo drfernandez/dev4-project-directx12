@@ -1,0 +1,3 @@
+D:/Full Sail/DEV4/Project/dev4-project-directx12/build/CMakeFiles/Project_DX12.dir
+D:/Full Sail/DEV4/Project/dev4-project-directx12/build/CMakeFiles/ALL_BUILD.dir
+D:/Full Sail/DEV4/Project/dev4-project-directx12/build/CMakeFiles/ZERO_CHECK.dir
