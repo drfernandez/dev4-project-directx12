@@ -6,13 +6,6 @@
 #include "FSLogo.h"
 
 
-struct VP
-{
-	GW::MATH::GMATRIXF view;
-	GW::MATH::GMATRIXF projection;
-};
-
-
 // Creation, Rendering & Cleanup
 class Renderer
 {
@@ -20,6 +13,10 @@ private:
 	// proxy handles
 	GW::SYSTEM::GWindow								win;
 	GW::GRAPHICS::GDirectX12Surface					d3d;
+
+	GW::MATH::GMatrix								matrixProxy;
+	GW::MATH::GMATRIXF								viewMatrix;
+	GW::MATH::GMATRIXF								projectionMatrix;
 
 	D3D12_VERTEX_BUFFER_VIEW						vertexView;
 	D3D12_INDEX_BUFFER_VIEW							indexView;
@@ -49,6 +46,23 @@ public:
 		d3d = _d3d;
 		ID3D12Device* creator;
 		d3d.GetDevice((void**)&creator);
+
+		matrixProxy.Create();
+
+		// view and projection creation
+		{
+			GW::MATH::GVECTORF eye = { 0.75f, 0.25f, -1.5f, 0.0f };
+			GW::MATH::GVECTORF at = { 0.15f, 0.75f, 0.0f, 0.0f };
+			GW::MATH::GVECTORF up = { 0.0f, 1.0f, 0.0f, 0.0f };
+			matrixProxy.LookAtLHF(eye, at, up, viewMatrix);
+
+			float fov = G_DEGREE_TO_RADIAN(65);
+			float zn = 0.1f;
+			float zf = 100.0f;
+			float aspect = 0.0f;
+			d3d.GetAspectRatio(aspect);
+			matrixProxy.ProjectionDirectXLHF(fov, aspect, zn, zf, projectionMatrix);
+		}
 
 		// vertex buffer creation
 		{
@@ -87,7 +101,7 @@ public:
 		{
 			// constant buffer heap creation
 			D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-			cbvHeapDesc.NumDescriptors = 10;		// X number of constant buffer heaps (256 bytes)
+			cbvHeapDesc.NumDescriptors = 2;		// X number of constant buffer heaps (256 bytes)
 			cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 			creator->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(cbvHeap.ReleaseAndGetAddressOf()));
@@ -96,7 +110,7 @@ public:
 
 			HRESULT hr = E_NOTIMPL;
 			CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-			CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 12));
+			CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF)) * 12);
 			hr = creator->CreateCommittedResource(
 				&prop,
 				D3D12_HEAP_FLAG_NONE,
@@ -114,6 +128,7 @@ public:
 
 			CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
 			constantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&constantBufferData));
+
 		}
 
 		UINT compilerFlags = D3DCOMPILE_ENABLE_STRICTNESS;
@@ -150,14 +165,15 @@ public:
 		};
 		
 
-		CD3DX12_ROOT_PARAMETER rootParameters[1] = {};
-		rootParameters[0].InitAsConstantBufferView(0, 0); // register, space
+		CD3DX12_ROOT_PARAMETER rootParameters[2] = {};
+		rootParameters[0].InitAsConstantBufferView(0, 0); // register, space	(view,projection)
+		rootParameters[1].InitAsShaderResourceView(0, 0); // register, space	(MODEL_DATA)
 
 
 		// create root signature
 		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
 		rootSignatureDesc.Init(
-			1, rootParameters, // number of params, root parameters
+			ARRAYSIZE(rootParameters), rootParameters, // number of params, root parameters
 			0, nullptr, // number of samplers, static samplers
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -201,11 +217,13 @@ public:
 		cmd->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
 		cmd->SetPipelineState(pipeline.Get());
 		// now we can draw
-		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBuffer->GetGPUVirtualAddress() + 1 * CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF));
+		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle1 = constantBuffer->GetGPUVirtualAddress() + 0 * CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF));
+		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle2 = constantBuffer->GetGPUVirtualAddress() + 1 * CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF));
 		cmd->IASetVertexBuffers(0, 1, &vertexView);
 		cmd->IASetIndexBuffer(&indexView);
 		cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		cmd->SetGraphicsRootConstantBufferView(0, cbvHandle);
+		cmd->SetGraphicsRootConstantBufferView(0, cbvHandle1);
+		cmd->SetGraphicsRootConstantBufferView(1, cbvHandle2);
 		cmd->DrawIndexedInstanced(FSLogo_indexcount, 1, 0, 0, 0);
 		// release temp handles
 		cmd->Release();
@@ -220,7 +238,11 @@ public:
 
 	void Update(float delta)
 	{
+		memcpy(&constantBufferData[0], &viewMatrix, sizeof(GW::MATH::GMATRIXF));
+		memcpy(&constantBufferData[1], &projectionMatrix, sizeof(GW::MATH::GMATRIXF));
+		memcpy(&constantBufferData[4], &GW::MATH::GIdentityMatrixF, sizeof(GW::MATH::GMATRIXF));
 
+		int debug = 0;
 	}
 
 	std::string Renderer::ShaderAsString(const char* shaderFilePath)

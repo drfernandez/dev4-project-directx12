@@ -2,6 +2,7 @@
 #define GATEWARE_ENABLE_CORE // All libraries need this
 #define GATEWARE_ENABLE_SYSTEM // Graphics libs require system level libraries
 #define GATEWARE_ENABLE_GRAPHICS // Enables all Graphics Libraries
+#define GATEWARE_ENABLE_MATH // Enables all Math Libraries
 // Ignore some GRAPHICS libraries we aren't going to use
 #define GATEWARE_DISABLE_GDIRECTX11SURFACE // we have another template for this
 #define GATEWARE_DISABLE_GOPENGLSURFACE // we have another template for this
@@ -49,7 +50,7 @@ int main()
 						cmd->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1, 0, 0, nullptr);
 						renderer.Update(0.0f);
 						renderer.Render(); // draw
-						d3d12.EndFrame(false);
+						d3d12.EndFrame(true);
 						cmd->Release();
 					}
 				}
