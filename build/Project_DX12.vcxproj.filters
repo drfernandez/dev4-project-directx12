@@ -4,6 +4,9 @@
     <ClCompile Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\XTime.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\Gateware.h">
@@ -15,9 +18,23 @@
     <ClInclude Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\d3dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\FSLogo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\XTime.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <FXCompile Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\shaders\VertexShader.hlsl">
+      <Filter>shaders</Filter>
+    </FXCompile>
+    <FXCompile Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\shaders\PixelShader.hlsl">
+      <Filter>shaders</Filter>
+    </FXCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Header Files">
@@ -25,6 +42,9 @@
     </Filter>
     <Filter Include="Source Files">
       <UniqueIdentifier>{6EDDDAC6-F158-36EF-BD9E-071EDA767549}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{05B5EEB7-6BB2-34C4-8245-B69208869045}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

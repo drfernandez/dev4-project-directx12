@@ -123,6 +123,9 @@
     <ProjectReference>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
     </ProjectReference>
+    <FxCompile>
+      <ShaderModel>5.0</ShaderModel>
+    </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -305,6 +308,20 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\main.cpp" />
     <ClInclude Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\renderer.h" />
     <ClInclude Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\d3dx12.h" />
+    <ClInclude Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\FSLogo.h" />
+    <ClInclude Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\XTime.h" />
+    <ClCompile Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\source\XTime.cpp" />
+    <FXCompile Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\shaders\VertexShader.hlsl">
+      <EntryPointName>main</EntryPointName>
+      <ShaderType>Vertex</ShaderType>
+      <ShaderModel>6.0</ShaderModel>
+    </FXCompile>
+    <FXCompile Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\shaders\PixelShader.hlsl">
+      <EntryPointName>main</EntryPointName>
+      <ShaderType>Pixel</ShaderType>
+      <ShaderModel>6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
+    </FXCompile>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="D:\Full Sail\DEV4\Project\dev4-project-directx12\build\ZERO_CHECK.vcxproj">

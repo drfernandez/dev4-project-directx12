@@ -16,14 +16,19 @@ if(WIN32)
 		source/main.cpp
 		source/renderer.h
 		source/d3dx12.h
+		source/fslogo.h
+		source/xtime.h
+		source/xtime.cpp
 	)
 
 	# CMake FXC shader compilation, add any shaders you want compiled here
 	set(VERTEX_SHADERS 
 		# add vertex shader (.hlsl) files here
+		shaders/vertexshader.hlsl
 	)
 	set(PIXEL_SHADERS 
 		# add pixel shader (.hlsl) files here
+		shaders/pixelshader.hlsl
 	)
 
 	# Add any new C/C++ source code here
@@ -37,15 +42,25 @@ if(WIN32)
 	# This code will tell visual studio to convert above shader .hlsl to .h files
 	# The produced .h files can be included and contain the compiled shader byte code
 	set_source_files_properties( ${VERTEX_SHADERS} PROPERTIES 
-		VS_SHADER_TYPE Vertex VS_SHADER_MODEL 5.0 VS_SHADER_ENTRYPOINT main 
-		VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
-		VS_SHADER_VARIABLE_NAME "%(Filename)"
-		VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:true>
+		VS_SHADER_TYPE Vertex 
+		VS_SHADER_MODEL 6.0 
+		VS_SHADER_ENTRYPOINT main 
+		#VS_TOOL_OVERRIDE "None"
+		#VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
+		#VS_SHADER_VARIABLE_NAME "%(Filename)"
+		#VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:true>
 	)
 	set_source_files_properties( ${PIXEL_SHADERS} PROPERTIES 
-		VS_SHADER_TYPE Pixel VS_SHADER_MODEL 5.0 VS_SHADER_ENTRYPOINT main 
-		VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
-		VS_SHADER_VARIABLE_NAME "%(Filename)"
-		VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:true>
+		VS_SHADER_TYPE Pixel 
+		VS_SHADER_MODEL 6.0 
+		VS_SHADER_ENTRYPOINT main
+		#VS_TOOL_OVERRIDE "None"
+		#VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
+		#VS_SHADER_VARIABLE_NAME "%(Filename)"
+		#VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:true>
 	)
+	
+	#set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${VERTEX_SHADERS})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${PIXEL_SHADERS})
 endif(WIN32)

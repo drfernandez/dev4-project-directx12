@@ -23,6 +23,7 @@ int main()
 	GDirectX12Surface d3d12;
 	if (+win.Create(0, 0, 800, 600, GWindowStyle::WINDOWEDBORDERED))
 	{
+		win.SetWindowName("Dan Fernandez - Project - DX12");
 		float clr[] = { 0, 168/255.0f, 107/255.0f, 1 }; // start with a jade color
 		msgs.Create([&](const GW::GEvent& e) {
 			GW::SYSTEM::GWindow::Events q;
@@ -46,6 +47,7 @@ int main()
 					{
 						cmd->ClearRenderTargetView(rtv, clr, 0, nullptr);
 						cmd->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1, 0, 0, nullptr);
+						renderer.Update(0.0f);
 						renderer.Render(); // draw
 						d3d12.EndFrame(false);
 						cmd->Release();
