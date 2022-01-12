@@ -47,9 +47,7 @@ struct MODEL_DATA
 StructuredBuffer<MODEL_DATA> SceneData : register(t0, space0);
 
 VS_OUT main(VS_IN input)
-{
-    VS_OUT output = (VS_OUT) 0;
-    
+{    
     float4 p = float4(input.pos, 1.0f);
     float2 u = input.uvw.xy;
     float3 n = normalize(input.nrm);
@@ -60,9 +58,7 @@ VS_OUT main(VS_IN input)
     p = mul(projection, p);
     n = mul(w, float4(n, 0.0f)).xyz;
     
-    output.pos = p;
-    output.uv = u;
-    output.nrm = n;
+    VS_OUT output = { p, u, n };
     
     return output;
 }

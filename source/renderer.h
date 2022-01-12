@@ -48,6 +48,20 @@ private:
 		return (byteSize + (D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1)) & ~(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1);
 	};
 
+	inline std::string Renderer::ShaderAsString(const char* shaderFilePath)
+	{
+		std::string output;
+		unsigned int stringLength = 0;
+		GW::SYSTEM::GFile file; file.Create();
+		file.GetFileSize(shaderFilePath, stringLength);
+		if (stringLength && +file.OpenBinaryRead(shaderFilePath))
+		{
+			output.resize(stringLength);
+			file.Read(&output[0], stringLength);
+		}
+		return output;
+	}
+
 public:
 	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d)
 	{
@@ -111,11 +125,11 @@ public:
 			indexView.SizeInBytes = sizeof(FSLogo_indices);
 			indexView.Format = DXGI_FORMAT_R32_UINT;
 		}
-		// constant buffer creation
+		// constant buffer (CBV) / structured buffer (SRV) creation
 		{
 			// constant buffer heap creation
 			D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-			cbvHeapDesc.NumDescriptors = 2;		// X number items to create from cbv_srv_uav heap
+			cbvHeapDesc.NumDescriptors = 2;		// X number of descriptors to create from cbv_srv_uav heap
 			cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 			creator->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(cbvHeap.ReleaseAndGetAddressOf()));
@@ -143,7 +157,7 @@ public:
 			creator->CreateConstantBufferView(&cbvDesc, cbvSceneHandle);
 
 			// commited resource for the structured buffer
-			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(MODEL_DATA) * FSLogo_materialcount);
+			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(MODEL_DATA) * FSLogo_meshcount);
 			hr = creator->CreateCommittedResource(
 				&prop,
 				D3D12_HEAP_FLAG_NONE,
@@ -152,14 +166,13 @@ public:
 				nullptr,
 				IID_PPV_ARGS(&structuredBufferModel));
 
-
 			// srv description
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 			srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 			srvDesc.Buffer.FirstElement = 0;
-			srvDesc.Buffer.NumElements = FSLogo_materialcount;
+			srvDesc.Buffer.NumElements = FSLogo_meshcount;
 			srvDesc.Buffer.StructureByteStride = sizeof(MODEL_DATA);			
 
 			structuredBufferHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
@@ -208,10 +221,10 @@ public:
 		//ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0);
 
 		CD3DX12_ROOT_PARAMETER rootParameters[3] = {};
-		rootParameters[0].InitAsConstantBufferView(0, 0); // register, space	(view,projection)
-		rootParameters[1].InitAsShaderResourceView(0, 0); // register, space	(MODEL_DATA)
-		rootParameters[2].InitAsConstants(1, 1, 0);
-		//rootParameters[1].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
+		rootParameters[0].InitAsConstantBufferView(0, 0);	// register, space	(view,projection)
+		rootParameters[1].InitAsShaderResourceView(0, 0);	// register, space	(MODEL_DATA)
+		rootParameters[2].InitAsConstants(1, 1, 0);			// num32bitConstants, register, space  (mesh_id)
+		//rootParameters[3].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
 
 		// create root signature
 		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
@@ -246,6 +259,7 @@ public:
 		// free temporary handle
 		creator->Release();
 	}
+
 	void Render()
 	{
 		// grab the context & render target
@@ -255,12 +269,14 @@ public:
 		d3d.GetCommandList((void**)&cmd);
 		d3d.GetCurrentRenderTargetView((void**)&rtv);
 		d3d.GetDepthStencilView((void**)&dsv);
+
 		// setup the pipeline
 		cmd->SetGraphicsRootSignature(rootSignature.Get());
 		cmd->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
 		cmd->SetPipelineState(pipeline.Get());
+
 		// now we can draw
-		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 2);
+		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 2);
 		D3D12_GPU_VIRTUAL_ADDRESS srvHandle = structuredBufferModel->GetGPUVirtualAddress() + 0U * (sizeof(MODEL_DATA) * 2);
 		cmd->IASetVertexBuffers(0, 1, &vertexView);
 		cmd->IASetIndexBuffer(&indexView);
@@ -273,7 +289,6 @@ public:
 			cmd->SetGraphicsRoot32BitConstants(2, 1, &i, 0);
 			cmd->DrawIndexedInstanced(FSLogo_meshes[i].indexCount, 1, FSLogo_meshes[i].indexOffset, 0, 0);
 		}
-		//cmd->DrawIndexedInstanced(FSLogo_indexcount, 1, 0, 0, 0);
 		// release temp handles
 		cmd->Release();
 	}
@@ -290,29 +305,14 @@ public:
 		memcpy(&constantBufferSceneData[0], &viewMatrix, sizeof(GW::MATH::GMATRIXF));
 		memcpy(&constantBufferSceneData[1], &projectionMatrix, sizeof(GW::MATH::GMATRIXF));
 
-		GW::MATH::GMATRIXF rotationY;
-		matrixProxy.RotateYGlobalF(GW::MATH::GIdentityMatrixF, G_DEGREE_TO_RADIAN(deltaTime), rotationY);
-		matrixProxy.MultiplyMatrixF(worldMatrix[1], rotationY, worldMatrix[1]);
+		matrixProxy.RotateYGlobalF(worldMatrix[1], G_DEGREE_TO_RADIAN(deltaTime), worldMatrix[1]);
 
 		// can setup the attribs to be copied over once instead of each frame
 		for (UINT i = 0; i < FSLogo_meshcount; i++)
 		{
 			MODEL_DATA md = { worldMatrix[i], FSLogo_materials[i].attrib };
-			memcpy(&structuredBufferModelData[i], &md, sizeof(md));
+			memcpy(&structuredBufferModelData[i], &md, sizeof(MODEL_DATA));
 		}
 	}
 
-	std::string Renderer::ShaderAsString(const char* shaderFilePath)
-	{
-		std::string output;
-		unsigned int stringLength = 0;
-		GW::SYSTEM::GFile file; file.Create();
-		file.GetFileSize(shaderFilePath, stringLength);
-		if (stringLength && +file.OpenBinaryRead(shaderFilePath))
-		{
-			output.resize(stringLength);
-			file.Read(&output[0], stringLength);
-		}
-		return output;
-	}
 };
