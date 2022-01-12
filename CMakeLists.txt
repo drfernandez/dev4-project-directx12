@@ -19,6 +19,7 @@ if(WIN32)
 		source/fslogo.h
 		source/xtime.h
 		source/xtime.cpp
+		source/chronotimer.h
 	)
 
 	# CMake FXC shader compilation, add any shaders you want compiled here
