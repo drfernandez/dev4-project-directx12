@@ -11,6 +11,7 @@
 // With what we want & what we don't defined we can include the API
 #include "Gateware.h"
 #include "renderer.h"
+#include "chronotimer.h"
 // open some namespaces to compact the code a bit
 using namespace GW;
 using namespace CORE;
@@ -19,6 +20,7 @@ using namespace GRAPHICS;
 // lets pop a window and use D3D12 to clear to a jade colored screen
 int main()
 {
+	ChronoTimer timer;
 	GWindow win;
 	GEventResponder msgs;
 	GDirectX12Surface d3d12;
@@ -46,9 +48,10 @@ int main()
 						+d3d12.GetCurrentRenderTargetView((void**)&rtv) &&
 						+d3d12.GetDepthStencilView((void**)&dsv))
 					{
+						timer.Signal();
 						cmd->ClearRenderTargetView(rtv, clr, 0, nullptr);
 						cmd->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1, 0, 0, nullptr);
-						renderer.Update(0.0f);
+						renderer.Update(timer.Delta());
 						renderer.Render(); // draw
 						d3d12.EndFrame(true);
 						cmd->Release();

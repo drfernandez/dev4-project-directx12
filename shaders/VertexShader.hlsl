@@ -8,16 +8,16 @@ struct VS_IN
 
 struct ATTRIBUTES
 {
-    float3 Kd; // diffuse reflectivity
-    float d; // dissolve (transparency) 
-    float3 Ks; // specular reflectivity
-    float Ns; // specular exponent
-    float3 Ka; // ambient reflectivity
-    float sharpness; // local reflection map sharpness
-    float3 Tf; // transmission filter
-    float Ni; // optical density (index of refraction)
-    float3 Ke; // emissive reflectivity
-    uint illum; // illumination model
+    float3  Kd; // diffuse reflectivity
+    float   d; // dissolve (transparency) 
+    float3  Ks; // specular reflectivity
+    float   Ns; // specular exponent
+    float3  Ka; // ambient reflectivity
+    float   sharpness; // local reflection map sharpness
+    float3  Tf; // transmission filter
+    float   Ni; // optical density (index of refraction)
+    float3  Ke; // emissive reflectivity
+    uint    illum; // illumination model
 };
 
 struct VS_OUT
@@ -27,19 +27,24 @@ struct VS_OUT
     float3 nrm : NORMAL;
 };
 
-cbuffer SCENE : register(b0)
+cbuffer SCENE : register(b0, space0)
 {
     matrix view;
     matrix projection;
 };
 
-struct MODEL_DATA
+cbuffer MESH_DATA : register(b1, space0)
 {
-    matrix world;
-    ATTRIBUTES attribs;
+    uint mesh_id;
 };
 
-StructuredBuffer<MODEL_DATA> SceneData : register(t0);
+struct MODEL_DATA
+{
+    matrix      world;
+    ATTRIBUTES  attribs;
+};
+
+StructuredBuffer<MODEL_DATA> SceneData : register(t0, space0);
 
 VS_OUT main(VS_IN input)
 {
@@ -49,14 +54,15 @@ VS_OUT main(VS_IN input)
     float2 u = input.uvw.xy;
     float3 n = normalize(input.nrm);
     
-    //output.pos = float4(p.x, p.y - 0.75f, 0.0f, 1.0f);
-    p = mul(SceneData[0].world, p);
+    matrix w = SceneData[mesh_id].world;
+    p = mul(w, p);
     p = mul(view, p);
     p = mul(projection, p);
+    n = mul(w, float4(n, 0.0f)).xyz;
     
     output.pos = p;
     output.uv = u;
-    output.nrm = mul(SceneData[0].world, float4(n, 0.0f)).xyz;
+    output.nrm = n;
     
     return output;
 }
