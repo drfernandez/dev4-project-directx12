@@ -51,8 +51,10 @@ int main()
 						timer.Signal();
 						cmd->ClearRenderTargetView(rtv, clr, 0, nullptr);
 						cmd->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1, 0, 0, nullptr);
+
 						renderer.Update(timer.Delta());
 						renderer.Render(); // draw
+
 						d3d12.EndFrame(true);
 						cmd->Release();
 					}
