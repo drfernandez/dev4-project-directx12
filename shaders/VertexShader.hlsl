@@ -36,12 +36,14 @@ cbuffer SCENE : register(b0, space0)
 cbuffer MESH_DATA : register(b1, space0)
 {
     uint mesh_id;
+    uint submesh_id;
 };
 
+#define MAX_SUBMESH_COUNT 10
 struct MODEL_DATA
 {
-    matrix      world;
-    ATTRIBUTES  attribs;
+    matrix world[MAX_SUBMESH_COUNT];
+    ATTRIBUTES attribs[MAX_SUBMESH_COUNT];
 };
 
 StructuredBuffer<MODEL_DATA> SceneData : register(t0, space0);
@@ -52,7 +54,7 @@ VS_OUT main(VS_IN input)
     float2 u = input.uvw.xy;
     float3 n = normalize(input.nrm);
     
-    matrix w = SceneData[mesh_id].world;
+    matrix w = SceneData[mesh_id].world[submesh_id];
     p = mul(w, p);
     p = mul(view, p);
     p = mul(projection, p);

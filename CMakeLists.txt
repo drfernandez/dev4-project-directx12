@@ -20,6 +20,11 @@ if(WIN32)
 		source/xtime.h
 		source/xtime.cpp
 		source/chronotimer.h
+		source/structures.h
+		source/level.h
+		source/level.cpp
+		source/texturemanager.h
+		source/texturemanager.cpp
 	)
 
 	# CMake FXC shader compilation, add any shaders you want compiled here

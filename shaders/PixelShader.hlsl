@@ -16,12 +16,14 @@ struct ATTRIBUTES
 cbuffer MESH_DATA : register(b1, space0)
 {
     uint mesh_id;
+    uint submesh_id;
 };
 
+#define MAX_SUBMESH_COUNT 10
 struct MODEL_DATA
 {
-    matrix world;
-    ATTRIBUTES attribs;
+    matrix world[MAX_SUBMESH_COUNT];
+    ATTRIBUTES attribs[MAX_SUBMESH_COUNT];
 };
 
 struct PS_IN
@@ -39,7 +41,7 @@ float4 main(PS_IN input) : SV_TARGET
     float4 lightColor = float4(0.9f, 0.9f, 1.0f, 1.0f);    
     float lightRatio = saturate(dot(-lightDir, input.nrm));
     
-    ATTRIBUTES material = SceneData[mesh_id].attribs;
+    ATTRIBUTES material = SceneData[mesh_id].attribs[submesh_id];
     
     return saturate(lightColor * lightRatio * float4(material.Kd, material.d));
 }

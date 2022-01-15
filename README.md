@@ -1,6 +1,6 @@
-# JadeScreen
+# DEV4 Project DirectX 12
 
-A D3D12 Template for Windows.(D3D12 is a Microsoft only API)
+A D3D12 Project for Full Sail University's course, DEV4.
 
 *All you should need is Visual Studio and the Windows SDK*
 

@@ -4,11 +4,13 @@
 #pragma comment(lib, "d3dcompiler.lib")
 #include "d3dx12.h" // official helper file provided by microsoft
 #include "FSLogo.h"
+#include "level.h"
 
+#define MAX_SUBMESH_COUNT 10
 struct MODEL_DATA
 {
-	GW::MATH::GMATRIXF      world;
-	OBJ_ATTRIBUTES			attribs;
+	GW::MATH::GMATRIXF      world[MAX_SUBMESH_COUNT];
+	OBJ_ATTRIBUTES			attribs[MAX_SUBMESH_COUNT];
 };
 
 
@@ -21,7 +23,7 @@ private:
 	GW::GRAPHICS::GDirectX12Surface					d3d;
 
 	GW::MATH::GMatrix								matrixProxy;
-	GW::MATH::GMATRIXF								worldMatrix[2];
+	GW::MATH::GMATRIXF								identityMatrix;
 	GW::MATH::GMATRIXF								viewMatrix;
 	GW::MATH::GMATRIXF								projectionMatrix;
 
@@ -42,6 +44,9 @@ private:
 	MODEL_DATA*										structuredBufferModelData;
 	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferModel;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferHandle;
+	std::vector<MODEL_DATA>							modelData;
+
+	Level											currentLevel;
 
 	inline UINT CalculateConstantBufferByteSize(UINT byteSize)
 	{
@@ -72,9 +77,18 @@ public:
 
 		matrixProxy.Create();
 
-		for (UINT i = 0; i < ARRAYSIZE(worldMatrix); i++)
 		{
-			worldMatrix[i] = GW::MATH::GIdentityMatrixF;
+			identityMatrix = GW::MATH::GIdentityMatrixF;
+			for (size_t j = 0; j < 1; j++)	// mesh loop
+			{
+				MODEL_DATA md = {};
+				for (UINT i = 0; i < FSLogo_meshcount; i++)	// submesh loop
+				{
+					md.world[i] = identityMatrix;
+					md.attribs[i] = FSLogo_materials[i].attrib;
+				}
+				modelData.push_back(md);
+			}			
 		}
 
 		// view and projection creation
@@ -156,8 +170,9 @@ public:
 			// create CBV
 			creator->CreateConstantBufferView(&cbvDesc, cbvSceneHandle);
 
+			const UINT numModels = 1;
 			// commited resource for the structured buffer
-			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(MODEL_DATA) * FSLogo_meshcount);
+			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(MODEL_DATA) * numModels);
 			hr = creator->CreateCommittedResource(
 				&prop,
 				D3D12_HEAP_FLAG_NONE,
@@ -172,7 +187,7 @@ public:
 			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 			srvDesc.Buffer.FirstElement = 0;
-			srvDesc.Buffer.NumElements = FSLogo_meshcount;
+			srvDesc.Buffer.NumElements = numModels;
 			srvDesc.Buffer.StructureByteStride = sizeof(MODEL_DATA);			
 
 			structuredBufferHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
@@ -223,8 +238,9 @@ public:
 		CD3DX12_ROOT_PARAMETER rootParameters[3] = {};
 		rootParameters[0].InitAsConstantBufferView(0, 0);	// register, space	(view,projection)
 		rootParameters[1].InitAsShaderResourceView(0, 0);	// register, space	(MODEL_DATA)
-		rootParameters[2].InitAsConstants(1, 1, 0);			// num32bitConstants, register, space  (mesh_id)
+		rootParameters[2].InitAsConstants(2, 1, 0);			// num32bitConstants, register, space  (mesh_id)
 		//rootParameters[3].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
+
 
 		// create root signature
 		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
@@ -277,17 +293,21 @@ public:
 
 		// now we can draw
 		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 2);
-		D3D12_GPU_VIRTUAL_ADDRESS srvHandle = structuredBufferModel->GetGPUVirtualAddress() + 0U * (sizeof(MODEL_DATA) * 2);
+		D3D12_GPU_VIRTUAL_ADDRESS srvHandle = structuredBufferModel->GetGPUVirtualAddress() + 0U * (sizeof(MODEL_DATA));
 		cmd->IASetVertexBuffers(0, 1, &vertexView);
 		cmd->IASetIndexBuffer(&indexView);
 		cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		cmd->SetGraphicsRootConstantBufferView(0, cbvHandle);
 		cmd->SetGraphicsRootShaderResourceView(1, srvHandle);
 
-		for (UINT i = 0; i < FSLogo_meshcount; i++)
+		for (UINT j = 0; j < 1; j++)	// mesh count
 		{
-			cmd->SetGraphicsRoot32BitConstants(2, 1, &i, 0);
-			cmd->DrawIndexedInstanced(FSLogo_meshes[i].indexCount, 1, FSLogo_meshes[i].indexOffset, 0, 0);
+			for (UINT i = 0; i < FSLogo_meshcount; i++)	// submesh count
+			{
+				UINT root32BitConstants[2] = { j, i };	// mesh_id, submesh_id, material_id?
+				cmd->SetGraphicsRoot32BitConstants(2, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
+				cmd->DrawIndexedInstanced(FSLogo_meshes[i].indexCount, 1, FSLogo_meshes[i].indexOffset, 0, 0);
+			}
 		}
 		// release temp handles
 		cmd->Release();
@@ -305,14 +325,9 @@ public:
 		memcpy(&constantBufferSceneData[0], &viewMatrix, sizeof(GW::MATH::GMATRIXF));
 		memcpy(&constantBufferSceneData[1], &projectionMatrix, sizeof(GW::MATH::GMATRIXF));
 
-		matrixProxy.RotateYGlobalF(worldMatrix[1], G_DEGREE_TO_RADIAN(deltaTime), worldMatrix[1]);
+		matrixProxy.RotateYGlobalF(modelData[0].world[1], G_DEGREE_TO_RADIAN(deltaTime), modelData[0].world[1]);
 
-		// can setup the attribs to be copied over once instead of each frame
-		for (UINT i = 0; i < FSLogo_meshcount; i++)
-		{
-			MODEL_DATA md = { worldMatrix[i], FSLogo_materials[i].attrib };
-			memcpy(&structuredBufferModelData[i], &md, sizeof(MODEL_DATA));
-		}
+		memcpy(structuredBufferModelData, modelData.data(), sizeof(MODEL_DATA) * modelData.size());
 	}
 
 };
