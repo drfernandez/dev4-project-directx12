@@ -3,6 +3,7 @@
 #define GATEWARE_ENABLE_SYSTEM // Graphics libs require system level libraries
 #define GATEWARE_ENABLE_GRAPHICS // Enables all Graphics Libraries
 #define GATEWARE_ENABLE_MATH // Enables all Math Libraries
+#define GATEWARE_ENABLE_INPUT
 // Ignore some GRAPHICS libraries we aren't going to use
 #define GATEWARE_DISABLE_GDIRECTX11SURFACE // we have another template for this
 #define GATEWARE_DISABLE_GOPENGLSURFACE // we have another template for this
@@ -24,7 +25,7 @@ int main()
 	GWindow win;
 	GEventResponder msgs;
 	GDirectX12Surface d3d12;
-	if (+win.Create(0, 0, 800, 600, GWindowStyle::WINDOWEDBORDERED))
+	if (+win.Create(0, 0, 1024, 768, GWindowStyle::WINDOWEDBORDERED))
 	{
 		win.SetWindowName("Dan Fernandez - Project - DirectX 12");
 		float clr[] = { 0, 168/255.0f, 107/255.0f, 1 }; // start with a jade color
