@@ -186,6 +186,13 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 			}
 			modelData.push_back(md);
 		}
+
+		bool levelLoaded = currentLevel.LoadLevel("../levels/Modular Dungeon 1.txt");
+
+		if (levelLoaded)
+		{
+			int debug = 0;
+		}
 	}
 
 	// view and projection creation
