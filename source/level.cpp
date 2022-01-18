@@ -3,19 +3,16 @@
 Level::Level()
 {
 	Clear();
-	tm = TextureManager::GetInstance();
-	tm->Initialize();
 }
 
 Level::~Level()
 {
 	Clear();
-	tm->Shutdown();
 }
 
-bool Level::LoadLevel(const std::string& filepath)
+BOOL Level::LoadLevel(const std::string& filepath)
 {
-	return false;
+	return FALSE;
 }
 
 void Level::Clear()
@@ -129,44 +126,48 @@ GW::MATH::GMATRIXF Level::ReadMatrixData()
 
 BOOL Level::LoadH2B(const std::string& h2bFilePath, H2B::INSTANCED_MESH& instancedMesh)
 {
-	BOOL success = false;
+	BOOL success = FALSE;
 	H2B::Parser p;
 	if (p.Parse(h2bFilePath.c_str()))
 	{
-		for (const auto& material : p.materials)
-		{
-			H2B::MATERIAL2 mat = H2B::MATERIAL2(material);
-			BOOL IsSkybox = (mat.name.compare("Skybox_Texture") != 0);
-			INT id = (IsSkybox) ? tm->GetTextureID_3D(mat) : tm->GetTextureID_2D(mat);
-		}
+		//for (const auto& material : p.materials)
+		//{
+		//	H2B::MATERIAL2 mat = H2B::MATERIAL2(material);
+		//	BOOL IsSkybox = (mat.name.compare("Skybox_Texture") != 0);
+		//	//INT id = (IsSkybox) ? tm->GetTextureID_3D(mat) : tm->GetTextureID_2D(mat);
+		//}
 
-		for (const auto& mesh : p.meshes)
-		{
-			H2B::MESH2 m = H2B::MESH2(mesh);
+		//for (const auto& mesh : p.meshes)
+		//{
+		//	H2B::MESH2 m = H2B::MESH2(mesh);
 
-			m.drawInfo.indexOffset += index_count;
-			bool IsCubeMap = (strcmp(p.materials[m.materialIndex].name, "Skybox_Texture") == 0);
-			H2B::MATERIAL2 material = H2B::MATERIAL2(p.materials[m.materialIndex]);
-			m.materialIndex = (!IsCubeMap) ? tm->GetTextureID_2D(material) : tm->GetTextureID_3D(material);
-			m.hasColorTexture = (tm->IsTexture(material)) ? 1 : 0;
-			instancedMesh.subMeshes.push_back(m);
-		}
+		//	m.drawInfo.indexOffset += index_count;
+		//	bool IsCubeMap = (strcmp(p.materials[m.materialIndex].name, "Skybox_Texture") == 0);
+		//	H2B::MATERIAL2 material = H2B::MATERIAL2(p.materials[m.materialIndex]);
+		//	//m.materialIndex = (!IsCubeMap) ? tm->GetTextureID_2D(material) : tm->GetTextureID_3D(material);
+		//	//m.hasColorTexture = (tm->IsTexture(material)) ? 1 : 0;
+		//	instancedMesh.subMeshes.push_back(m);
+		//}
 
-		instancedMesh.vertexOffset = vertex_count;
+		//instancedMesh.vertexOffset = vertex_count;
 
-		for (const auto& vertex : p.vertices)
-		{
-			vertices.push_back(vertex);
-		}
-		for (const auto& index : p.indices)
-		{
-			indices.push_back(index);
-		}
+		//for (const auto& vertex : p.vertices)
+		//{
+		//	vertices.push_back(vertex);
+		//}
+		//for (const auto& index : p.indices)
+		//{
+		//	indices.push_back(index);
+		//}
 
-		vertex_count += p.vertexCount;
-		index_count += p.indexCount;
-		material_count += p.materialCount;
-		success = true;
+		//vertex_count += p.vertexCount;
+		//index_count += p.indexCount;
+		//material_count += p.materialCount;
+
+
+		// insert materials, vertices, indicies into the level for storage
+
+		success = TRUE;
 	}
 
 	return success;
