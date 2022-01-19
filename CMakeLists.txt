@@ -16,7 +16,6 @@ if(WIN32)
 		source/main.cpp
 		source/renderer.h
 		source/d3dx12.h
-		source/fslogo.h
 		source/xtime.h
 		source/xtime.cpp
 		source/chronotimer.h
