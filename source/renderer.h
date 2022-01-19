@@ -3,16 +3,8 @@
 #include <d3dcompiler.h>
 #pragma comment(lib, "d3dcompiler.lib")
 #include "d3dx12.h" // official helper file provided by microsoft
-#include "FSLogo.h"
+//#include "FSLogo.h"
 #include "level.h"
-
-#define MAX_SUBMESH_COUNT 10
-struct MODEL_DATA
-{
-	GW::MATH::GMATRIXF      world[MAX_SUBMESH_COUNT];
-	OBJ_ATTRIBUTES			attribs[MAX_SUBMESH_COUNT];
-};
-
 
 // Creation, Rendering & Cleanup
 class Renderer
@@ -44,14 +36,20 @@ private:
 
 	UINT											cbvDescriptorSize;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>	cbvHeap;
-	GW::MATH::GMATRIXF*								constantBufferSceneData;
+
 	Microsoft::WRL::ComPtr<ID3D12Resource>			constantBufferScene;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					cbvSceneHandle;
+	GW::MATH::GMATRIXF*								constantBufferSceneData;
 
-	MODEL_DATA*										structuredBufferModelData;
-	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferModel;
-	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferHandle;
-	std::vector<MODEL_DATA>							modelData;
+	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferAttributesResource;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferAttributeHandle;
+	H2B::ATTRIBUTES*								structuredBufferAttributesData;
+	std::vector<H2B::ATTRIBUTES>					attributesData;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferInstanceResource;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferInstanceHandle;
+	GW::MATH::GMATRIXF*								structuredBufferInstanceData;
+	std::vector<GW::MATH::GMATRIXF>					instanceData;
 
 	Level											currentLevel;
 
@@ -174,24 +172,26 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	kbmProxy.Create(_win);
 	controllerProxy.Create();
 
+	HRESULT hr = E_NOTIMPL;
+
 	{
 		identityMatrix = GW::MATH::GIdentityMatrixF;
-		for (size_t j = 0; j < 1; j++)	// mesh loop
+
+		bool levelLoaded = currentLevel.LoadLevel("../levels/Modular Dungeon 3.txt");
+
+		for (const auto& m : currentLevel.uniqueMeshes)
 		{
-			MODEL_DATA md = {};
-			for (UINT i = 0; i < FSLogo_meshcount; i++)	// submesh loop
+			for (const auto& matrix : m.second.matrices)
 			{
-				md.world[i] = identityMatrix;
-				md.attribs[i] = FSLogo_materials[i].attrib;
+				instanceData.push_back(matrix);
 			}
-			modelData.push_back(md);
 		}
 
-		bool levelLoaded = currentLevel.LoadLevel("../levels/Modular Dungeon 1.txt");
-
-		if (levelLoaded)
+		MaterialManager* mm = currentLevel.mm;
+		for (UINT i = 0; i < mm->material_count; i++)
 		{
-			int debug = 0;
+			H2B::MATERIAL2 mat = H2B::MATERIAL2(mm->GetMaterial(i));
+			attributesData.push_back(mat.attrib);
 		}
 	}
 
@@ -213,49 +213,50 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	// vertex buffer creation
 	{
+		UINT vertexBufferSize = sizeof(H2B::VERTEX) * currentLevel.vertex_count;
 		creator->CreateCommittedResource( // using UPLOAD heap for simplicity
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), // DEFAULT recommend  
-			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(sizeof(FSLogo_vertices)),
+			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
 			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer));
 
 		UINT8* transferMemoryLocation = nullptr;
 		vertexBuffer->Map(0, &CD3DX12_RANGE(0, 0),
 			reinterpret_cast<void**>(&transferMemoryLocation));
-		memcpy(transferMemoryLocation, FSLogo_vertices, sizeof(FSLogo_vertices));
+		memcpy(transferMemoryLocation, currentLevel.vertices.data(), vertexBufferSize);
 		vertexBuffer->Unmap(0, nullptr);
 		// Create a vertex View to send to a Draw() call.
 		vertexView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
-		vertexView.StrideInBytes = sizeof(OBJ_VERT);
-		vertexView.SizeInBytes = sizeof(FSLogo_vertices);
+		vertexView.StrideInBytes = sizeof(H2B::VERTEX);
+		vertexView.SizeInBytes = vertexBufferSize;
 	}
 	// index buffer creation
 	{
+		UINT indexBufferSize = sizeof(UINT) * currentLevel.index_count;
 		creator->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(sizeof(FSLogo_indices)),
+			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize),
 			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&indexBuffer));
 
 		UINT8* transferMemoryLocation = nullptr;
 		indexBuffer->Map(0, &CD3DX12_RANGE(0, 0),
 			reinterpret_cast<void**>(&transferMemoryLocation));
-		memcpy(transferMemoryLocation, FSLogo_indices, sizeof(FSLogo_indices));
+		memcpy(transferMemoryLocation, currentLevel.indices.data(), indexBufferSize);
 		indexBuffer->Unmap(0, nullptr);
 		indexView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
-		indexView.SizeInBytes = sizeof(FSLogo_indices);
 		indexView.Format = DXGI_FORMAT_R32_UINT;
+		indexView.SizeInBytes = indexBufferSize;
 	}
 	// constant buffer (CBV) / structured buffer (SRV) creation
 	{
 		// constant buffer heap creation
 		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-		cbvHeapDesc.NumDescriptors = 2;		// X number of descriptors to create from cbv_srv_uav heap
+		cbvHeapDesc.NumDescriptors = 3;		// X number of descriptors to create from cbv_srv_uav heap
 		cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		creator->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(cbvHeap.ReleaseAndGetAddressOf()));
 
 		cbvDescriptorSize = creator->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-		HRESULT hr = E_NOTIMPL;
 		CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 2));
 		// commited resource for the constant buffer
@@ -275,16 +276,18 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		// create CBV
 		creator->CreateConstantBufferView(&cbvDesc, cbvSceneHandle);
 
-		const UINT numModels = 1;
+		const UINT numAttributes = currentLevel.mm->material_count;
 		// commited resource for the structured buffer
-		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(MODEL_DATA) * numModels);
+		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(H2B::ATTRIBUTES) * numAttributes);
 		hr = creator->CreateCommittedResource(
 			&prop,
 			D3D12_HEAP_FLAG_NONE,
 			&resource_desc,
 			D3D12_RESOURCE_STATE_GENERIC_READ,
 			nullptr,
-			IID_PPV_ARGS(&structuredBufferModel));
+			IID_PPV_ARGS(&structuredBufferAttributesResource));
+
+		structuredBufferAttributeHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
 
 		// srv description
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -292,16 +295,43 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		srvDesc.Buffer.FirstElement = 0;
-		srvDesc.Buffer.NumElements = numModels;
-		srvDesc.Buffer.StructureByteStride = sizeof(MODEL_DATA);
-
-		structuredBufferHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
+		srvDesc.Buffer.NumElements = numAttributes;
+		srvDesc.Buffer.StructureByteStride = sizeof(H2B::ATTRIBUTES);
 		// create SRV
-		creator->CreateShaderResourceView(structuredBufferModel.Get(), &srvDesc, structuredBufferHandle);
+		creator->CreateShaderResourceView(structuredBufferAttributesResource.Get(), &srvDesc, structuredBufferAttributeHandle);
+
+		const UINT numInstances = instanceData.size();
+		// commited resource for the structured buffer
+		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(GW::MATH::GMATRIXF) * numInstances);
+		hr = creator->CreateCommittedResource(
+			&prop,
+			D3D12_HEAP_FLAG_NONE,
+			&resource_desc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&structuredBufferInstanceResource));
+
+		structuredBufferInstanceHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHeap->GetCPUDescriptorHandleForHeapStart(), 2, cbvDescriptorSize);
+
+		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Buffer.FirstElement = 0;
+		srvDesc.Buffer.NumElements = numInstances;
+		srvDesc.Buffer.StructureByteStride = sizeof(GW::MATH::GMATRIXF);
+		// create SRV
+		creator->CreateShaderResourceView(structuredBufferInstanceResource.Get(), &srvDesc, structuredBufferInstanceHandle);
 
 		CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
 		hr = constantBufferScene->Map(0, &readRange, reinterpret_cast<void**>(&constantBufferSceneData));
-		hr = structuredBufferModel->Map(0, &readRange, reinterpret_cast<void**>(&structuredBufferModelData));
+
+		hr = structuredBufferAttributesResource->Map(0, &readRange, reinterpret_cast<void**>(&structuredBufferAttributesData));
+		memcpy(structuredBufferAttributesData, attributesData.data(), sizeof(H2B::ATTRIBUTES) * numAttributes);
+		structuredBufferAttributesResource->Unmap(0, nullptr);
+
+		hr = structuredBufferInstanceResource->Map(0, &readRange, reinterpret_cast<void**>(&structuredBufferInstanceData));
+		memcpy(structuredBufferInstanceData, instanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
+		structuredBufferInstanceResource->Unmap(0, nullptr);
 	}
 
 	UINT compilerFlags = D3DCOMPILE_ENABLE_STRICTNESS;
@@ -340,12 +370,13 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	//CD3DX12_DESCRIPTOR_RANGE ranges[1] = {};
 	//ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0);
 
-	CD3DX12_ROOT_PARAMETER rootParameters[3] = {};
-	rootParameters[0].InitAsConstantBufferView(0, 0);	// register, space	(view,projection)
-	rootParameters[1].InitAsShaderResourceView(0, 0);	// register, space	(MODEL_DATA)
-	rootParameters[2].InitAsConstants(2, 1, 0);			// num32bitConstants, register, space  (mesh_id)
-	//rootParameters[3].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
-
+	CD3DX12_ROOT_PARAMETER rootParameters[4] = {};
+	rootParameters[0].InitAsConstants(2, 0, 0);			// num32bitConstants, register, space  (mesh_id) b0
+	rootParameters[1].InitAsConstantBufferView(1, 0);	// register, space	(view,projection) b1
+	rootParameters[2].InitAsShaderResourceView(0, 0);	// register, space	(OBJ_ATTRIBUTES) t0
+	rootParameters[3].InitAsShaderResourceView(1, 0);	// register, space	(instance matrix data) t1
+	//rootParameters[4].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
+	
 
 	// create root signature
 	CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
@@ -355,7 +386,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	Microsoft::WRL::ComPtr<ID3DBlob> signature;
-	D3D12SerializeRootSignature(&rootSignatureDesc,
+	hr = D3D12SerializeRootSignature(&rootSignatureDesc,
 		D3D_ROOT_SIGNATURE_VERSION_1, &signature, &errors);
 
 	creator->CreateRootSignature(0, signature->GetBufferPointer(),
@@ -385,7 +416,6 @@ Renderer::~Renderer()
 {
 	// ComPtr will auto release so nothing to do here 
 	constantBufferScene->Unmap(0, nullptr);
-	structuredBufferModel->Unmap(0, nullptr);
 }
 
 VOID Renderer::Render()
@@ -399,26 +429,28 @@ VOID Renderer::Render()
 	d3d.GetDepthStencilView((void**)&dsv);
 
 	// setup the pipeline
-	cmd->SetGraphicsRootSignature(rootSignature.Get());
 	cmd->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+	cmd->SetGraphicsRootSignature(rootSignature.Get());
 	cmd->SetPipelineState(pipeline.Get());
 
 	// now we can draw
 	D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 2);
-	D3D12_GPU_VIRTUAL_ADDRESS srvHandle = structuredBufferModel->GetGPUVirtualAddress() + 0U * (sizeof(MODEL_DATA));
+	D3D12_GPU_VIRTUAL_ADDRESS srvAttributesHandle = structuredBufferAttributesResource->GetGPUVirtualAddress() + 0U * (sizeof(H2B::ATTRIBUTES));
+	D3D12_GPU_VIRTUAL_ADDRESS srvInstanceHandle = structuredBufferInstanceResource->GetGPUVirtualAddress() + 0U * sizeof(GW::MATH::GMATRIXF);
 	cmd->IASetVertexBuffers(0, 1, &vertexView);
 	cmd->IASetIndexBuffer(&indexView);
 	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	cmd->SetGraphicsRootConstantBufferView(0, cbvHandle);
-	cmd->SetGraphicsRootShaderResourceView(1, srvHandle);
+	cmd->SetGraphicsRootConstantBufferView(1, cbvHandle);
+	cmd->SetGraphicsRootShaderResourceView(2, srvAttributesHandle);
+	cmd->SetGraphicsRootShaderResourceView(3, srvInstanceHandle);
 
-	for (UINT j = 0; j < 1; j++)	// mesh count
+	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
-		for (UINT i = 0; i < FSLogo_meshcount; i++)	// submesh count
+		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 		{
-			UINT root32BitConstants[2] = { j, i };	// mesh_id, submesh_id, material_id?
-			cmd->SetGraphicsRoot32BitConstants(2, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
-			cmd->DrawIndexedInstanced(FSLogo_meshes[i].indexCount, 1, FSLogo_meshes[i].indexOffset, 0, 0);
+			UINT root32BitConstants[2] = { mesh.second.meshID, submesh.materialIndex };	// mesh_id, submesh_id, material_id?
+			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
+			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 		}
 	}
 	// release temp handles
@@ -429,11 +461,6 @@ VOID Renderer::Update(FLOAT deltaTime)
 {
 	UpdateCamera(deltaTime);
 
-
 	memcpy(&constantBufferSceneData[0], &viewMatrix, sizeof(GW::MATH::GMATRIXF));
 	memcpy(&constantBufferSceneData[1], &projectionMatrix, sizeof(GW::MATH::GMATRIXF));
-
-	matrixProxy.RotateYGlobalF(modelData[0].world[1], G_DEGREE_TO_RADIAN(deltaTime), modelData[0].world[1]);
-
-	memcpy(structuredBufferModelData, modelData.data(), sizeof(MODEL_DATA) * modelData.size());
 }

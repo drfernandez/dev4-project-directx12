@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <fstream>
+#include "materialmanager.h"
 
 class Level
 {
@@ -23,13 +24,12 @@ public:
 	GW::MATH::GMATRIXF camera;
 	UINT vertex_count;
 	UINT index_count;
-	UINT material_count;
 	std::vector<H2B::VERTEX> vertices;
 	std::vector<UINT> indices;
-	std::vector<H2B::MATERIAL2> materials;
 	std::map<std::string, H2B::INSTANCED_MESH> uniqueMeshes;
 	std::map<std::string, H2B::INSTANCED_MESH> uniqueSkyboxes;
 	std::vector<H2B::LIGHT> uniqueLights;
+	MaterialManager* mm;
 
 	Level();
 	~Level();

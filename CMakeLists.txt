@@ -23,6 +23,8 @@ if(WIN32)
 		source/structures.h
 		source/level.h
 		source/level.cpp
+		source/materialmanager.h
+		source/materialmanager.cpp
 	)
 
 	# CMake FXC shader compilation, add any shaders you want compiled here

@@ -13,19 +13,6 @@ struct ATTRIBUTES
     uint illum; // illumination model
 };
 
-cbuffer MESH_DATA : register(b1, space0)
-{
-    uint mesh_id;
-    uint submesh_id;
-};
-
-#define MAX_SUBMESH_COUNT 10
-struct MODEL_DATA
-{
-    matrix world[MAX_SUBMESH_COUNT];
-    ATTRIBUTES attribs[MAX_SUBMESH_COUNT];
-};
-
 struct PS_IN
 {
     float4 pos : SV_POSITION;
@@ -33,7 +20,18 @@ struct PS_IN
     float3 nrm : NORMAL;
 };
 
-StructuredBuffer<MODEL_DATA> SceneData : register(t0);
+cbuffer MESH_DATA : register(b0, space0)
+{
+    uint mesh_id;
+    uint material_id;
+};
+cbuffer SCENE : register(b1, space0)
+{
+    matrix view;
+    matrix projection;
+};
+StructuredBuffer<ATTRIBUTES> AttributesData : register(t0, space0);
+StructuredBuffer<matrix> InstanceData : register(t1, space0);
 
 float4 main(PS_IN input) : SV_TARGET
 {
@@ -41,7 +39,7 @@ float4 main(PS_IN input) : SV_TARGET
     float4 lightColor = float4(0.9f, 0.9f, 1.0f, 1.0f);    
     float lightRatio = saturate(dot(-lightDir, input.nrm));
     
-    ATTRIBUTES material = SceneData[mesh_id].attribs[submesh_id];
+    ATTRIBUTES material = AttributesData[material_id];
     
     return saturate(lightColor * lightRatio * float4(material.Kd, material.d));
 }

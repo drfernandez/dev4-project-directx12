@@ -3,16 +3,55 @@
 Level::Level()
 {
 	Clear();
+	mm = MaterialManager::GetInstance();
+	mm->Initialize();
 }
 
 Level::~Level()
 {
 	Clear();
+	mm->Shutdown();
 }
 
 BOOL Level::LoadLevel(const std::string& filepath)
 {
-	return FALSE;
+	Clear();
+	std::string name = "../levels/" + GetFileName(filepath) + ".txt";
+	if (input.is_open()) input.close();
+	input.open(name.c_str(), std::ios_base::in);
+	if (!input.is_open()) return FALSE;
+	name = GetFileName(filepath);
+	while (!input.eof())
+	{
+		char buffer[256] = { 0 };
+		input.getline(buffer, 256);
+		if (strcmp(buffer, "MESH") == 0) 
+			LoadMeshFromFile();
+		else if (strcmp(buffer, "LIGHT") == 0) 
+			LoadLightFromFile();
+		else if (strcmp(buffer, "CAMERA") == 0) 
+			LoadCameraFromFile();
+	}
+
+	UINT meshID = 0;
+	for (auto& mesh : uniqueMeshes)
+	{
+		mesh.second.meshID = meshID;
+		for (const auto& matrix : mesh.second.matrices)
+		{
+			meshID++;
+		}
+	}
+	for (auto& skybox : uniqueSkyboxes)
+	{
+		skybox.second.meshID = meshID;
+		for (const auto& matrix : skybox.second.matrices)
+		{
+			meshID++;
+		}
+	}
+	input.close();
+	return TRUE;
 }
 
 void Level::Clear()
@@ -21,7 +60,6 @@ void Level::Clear()
 	name.clear();
 	vertex_count = 0;
 	index_count = 0;
-	material_count = 0;
 	vertices.clear();
 	indices.clear();
 	uniqueMeshes.clear();
@@ -126,46 +164,35 @@ GW::MATH::GMATRIXF Level::ReadMatrixData()
 
 BOOL Level::LoadH2B(const std::string& h2bFilePath, H2B::INSTANCED_MESH& instancedMesh)
 {
+	// insert materials, vertices, indicies into the level for storage
 	BOOL success = FALSE;
 	H2B::Parser p;
 	if (p.Parse(h2bFilePath.c_str()))
 	{
-		//for (const auto& material : p.materials)
-		//{
-		//	H2B::MATERIAL2 mat = H2B::MATERIAL2(material);
-		//	BOOL IsSkybox = (mat.name.compare("Skybox_Texture") != 0);
-		//	//INT id = (IsSkybox) ? tm->GetTextureID_3D(mat) : tm->GetTextureID_2D(mat);
-		//}
+		for (const auto& mesh : p.meshes)
+		{
+			H2B::MESH2 m = H2B::MESH2(mesh);
+			H2B::MATERIAL2 mat = H2B::MATERIAL2(p.materials[m.materialIndex]);
+			m.drawInfo.indexOffset += index_count;
+			m.materialIndex = mm->GetMaterialID(mat);
+			instancedMesh.subMeshes.push_back(m);
+		}
 
-		//for (const auto& mesh : p.meshes)
-		//{
-		//	H2B::MESH2 m = H2B::MESH2(mesh);
+		instancedMesh.vertexOffset = vertex_count;
 
-		//	m.drawInfo.indexOffset += index_count;
-		//	bool IsCubeMap = (strcmp(p.materials[m.materialIndex].name, "Skybox_Texture") == 0);
-		//	H2B::MATERIAL2 material = H2B::MATERIAL2(p.materials[m.materialIndex]);
-		//	//m.materialIndex = (!IsCubeMap) ? tm->GetTextureID_2D(material) : tm->GetTextureID_3D(material);
-		//	//m.hasColorTexture = (tm->IsTexture(material)) ? 1 : 0;
-		//	instancedMesh.subMeshes.push_back(m);
-		//}
+		for (const auto& vertex : p.vertices)
+		{
+			vertices.push_back(vertex);
+		}
+		for (const auto& index : p.indices)
+		{
+			indices.push_back(index);
+		}
 
-		//instancedMesh.vertexOffset = vertex_count;
-
-		//for (const auto& vertex : p.vertices)
-		//{
-		//	vertices.push_back(vertex);
-		//}
-		//for (const auto& index : p.indices)
-		//{
-		//	indices.push_back(index);
-		//}
-
-		//vertex_count += p.vertexCount;
-		//index_count += p.indexCount;
-		//material_count += p.materialCount;
+		vertex_count += p.vertexCount;
+		index_count += p.indexCount;
 
 
-		// insert materials, vertices, indicies into the level for storage
 
 		success = TRUE;
 	}
