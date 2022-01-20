@@ -207,8 +207,8 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		}
 	}
 
-	// view and projection creation
 	{
+		//// view and projection creation
 		//GW::MATH::GVECTORF eye = { 0.75f, 0.25f, -1.5f, 0.0f };
 		//GW::MATH::GVECTORF at = { 0.15f, 0.75f, 0.0f, 0.0f };
 		//GW::MATH::GVECTORF up = { 0.0f, 1.0f, 0.0f, 0.0f };
@@ -224,8 +224,9 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		matrixProxy.ProjectionDirectXLHF(fov, aspect, zn, zf, projectionMatrix);
 	}
 
-	// vertex buffer creation
 	{
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		// vertex buffer creation
 		UINT vertexBufferSize = sizeof(H2B::VERTEX) * currentLevel.vertex_count;
 		creator->CreateCommittedResource( // using UPLOAD heap for simplicity
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), // DEFAULT recommend  
@@ -241,9 +242,11 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		vertexView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
 		vertexView.StrideInBytes = sizeof(H2B::VERTEX);
 		vertexView.SizeInBytes = vertexBufferSize;
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
-	// index buffer creation
 	{
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		// index buffer creation
 		UINT indexBufferSize = sizeof(UINT) * currentLevel.index_count;
 		creator->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -258,9 +261,11 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		indexView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
 		indexView.Format = DXGI_FORMAT_R32_UINT;
 		indexView.SizeInBytes = indexBufferSize;
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 	// constant buffer (CBV) / structured buffer (SRV) creation
 	{
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// constant buffer heap creation
 		D3D12_DESCRIPTOR_HEAP_DESC cbvsrvuavHeapDesc = {};
 		cbvsrvuavHeapDesc.NumDescriptors = 4;		// X number of descriptors to create from cbv_srv_uav heap
@@ -269,10 +274,12 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		creator->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(cbvsrvuavHeap.ReleaseAndGetAddressOf()));
 
 		cbvDescriptorSize = creator->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		UINT constantBufferSize = sizeof(SCENE);
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		UINT constantBufferSize = CalculateConstantBufferByteSize(sizeof(SCENE));
 		CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(CalculateConstantBufferByteSize(constantBufferSize));
+		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
 		// commited resource for the constant buffer
 		hr = creator->CreateCommittedResource(
 			&prop,
@@ -286,10 +293,13 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 		cbvDesc.BufferLocation = constantBufferScene->GetGPUVirtualAddress();
-		cbvDesc.SizeInBytes = CalculateConstantBufferByteSize(constantBufferSize);    // CB size is required to be 256-byte aligned.
+		cbvDesc.SizeInBytes = constantBufferSize;    // CB size is required to be 256-byte aligned.
 		// create CBV
 		creator->CreateConstantBufferView(&cbvDesc, cbvSceneHandle);
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		// materials
 		const UINT numAttributes = currentLevel.mm->material_count;
 		// commited resource for the structured buffer
 		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(H2B::ATTRIBUTES) * numAttributes);
@@ -313,7 +323,10 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		srvDesc.Buffer.StructureByteStride = sizeof(H2B::ATTRIBUTES);
 		// create SRV
 		creator->CreateShaderResourceView(structuredBufferAttributesResource.Get(), &srvDesc, structuredBufferAttributeHandle);
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		// instance data for matrices
 		const UINT numInstances = instanceData.size();
 		// commited resource for the structured buffer
 		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(GW::MATH::GMATRIXF) * numInstances);
@@ -335,7 +348,10 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		srvDesc.Buffer.StructureByteStride = sizeof(GW::MATH::GMATRIXF);
 		// create SRV
 		creator->CreateShaderResourceView(structuredBufferInstanceResource.Get(), &srvDesc, structuredBufferInstanceHandle);
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		// lighting information
 		const UINT numLights = currentLevel.uniqueLights.size();
 		// commited resource for the structured buffer
 		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(H2B::LIGHT) * numLights);
@@ -357,6 +373,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		srvDesc.Buffer.StructureByteStride = sizeof(H2B::LIGHT);
 		// create SRV
 		creator->CreateShaderResourceView(structuredBufferLightResource.Get(), &srvDesc, structuredBufferLightHandle);
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 		CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.

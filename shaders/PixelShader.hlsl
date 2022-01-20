@@ -20,7 +20,7 @@ cbuffer SCENE : register(b1, space0)
     float4 cameraPosition;
 };
 StructuredBuffer<ATTRIBUTES> AttributesData : register(t0, space0);
-StructuredBuffer<float4x4> InstanceData : register(t1, space0);
+StructuredBuffer<matrix> InstanceData : register(t1, space0);
 StructuredBuffer<LIGHT> LightData : register(t2, space0);
 
 float4 main(PS_IN input) : SV_TARGET
