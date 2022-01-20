@@ -70,6 +70,7 @@ void Level::Clear()
 
 BOOL Level::FileExists(std::string file)
 {
+	
 	std::ifstream in;
 	in.open(file, std::ios_base::in);
 	BOOL result = in.is_open();

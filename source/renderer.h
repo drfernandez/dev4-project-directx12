@@ -6,6 +6,13 @@
 //#include "FSLogo.h"
 #include "level.h"
 
+struct SCENE
+{
+	GW::MATH::GMATRIXF view;
+	GW::MATH::GMATRIXF projection;
+	GW::MATH::GVECTORF cameraPosition;
+};
+
 // Creation, Rendering & Cleanup
 class Renderer
 {
@@ -35,11 +42,11 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState>		pipeline;
 
 	UINT											cbvDescriptorSize;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>	cbvHeap;
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>	cbvsrvuavHeap;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>			constantBufferScene;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					cbvSceneHandle;
-	GW::MATH::GMATRIXF*								constantBufferSceneData;
+	SCENE*											constantBufferSceneData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferAttributesResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferAttributeHandle;
@@ -50,6 +57,11 @@ private:
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferInstanceHandle;
 	GW::MATH::GMATRIXF*								structuredBufferInstanceData;
 	std::vector<GW::MATH::GMATRIXF>					instanceData;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferLightResource;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferLightHandle;
+	H2B::LIGHT*										structuredBufferLightData;
+	std::vector<H2B::LIGHT>							lightData;
 
 	Level											currentLevel;
 
@@ -197,11 +209,12 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	// view and projection creation
 	{
-		GW::MATH::GVECTORF eye = { 0.75f, 0.25f, -1.5f, 0.0f };
-		GW::MATH::GVECTORF at = { 0.15f, 0.75f, 0.0f, 0.0f };
-		GW::MATH::GVECTORF up = { 0.0f, 1.0f, 0.0f, 0.0f };
-		matrixProxy.LookAtLHF(eye, at, up, viewMatrix);
-		matrixProxy.InverseF(viewMatrix, worldCamera);
+		//GW::MATH::GVECTORF eye = { 0.75f, 0.25f, -1.5f, 0.0f };
+		//GW::MATH::GVECTORF at = { 0.15f, 0.75f, 0.0f, 0.0f };
+		//GW::MATH::GVECTORF up = { 0.0f, 1.0f, 0.0f, 0.0f };
+		//matrixProxy.LookAtLHF(eye, at, up, viewMatrix);
+		//matrixProxy.InverseF(viewMatrix, worldCamera);
+		worldCamera = currentLevel.camera;
 
 		float fov = G_DEGREE_TO_RADIAN(65);
 		float zn = 0.1f;
@@ -249,16 +262,17 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	// constant buffer (CBV) / structured buffer (SRV) creation
 	{
 		// constant buffer heap creation
-		D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc = {};
-		cbvHeapDesc.NumDescriptors = 3;		// X number of descriptors to create from cbv_srv_uav heap
-		cbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		cbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		creator->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(cbvHeap.ReleaseAndGetAddressOf()));
+		D3D12_DESCRIPTOR_HEAP_DESC cbvsrvuavHeapDesc = {};
+		cbvsrvuavHeapDesc.NumDescriptors = 4;		// X number of descriptors to create from cbv_srv_uav heap
+		cbvsrvuavHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		cbvsrvuavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+		creator->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(cbvsrvuavHeap.ReleaseAndGetAddressOf()));
 
 		cbvDescriptorSize = creator->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
+		UINT constantBufferSize = sizeof(SCENE);
 		CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 2));
+		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(CalculateConstantBufferByteSize(constantBufferSize));
 		// commited resource for the constant buffer
 		hr = creator->CreateCommittedResource(
 			&prop,
@@ -268,11 +282,11 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 			nullptr,
 			IID_PPV_ARGS(&constantBufferScene));
 
-		cbvSceneHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHeap->GetCPUDescriptorHandleForHeapStart(), 0, cbvDescriptorSize);
+		cbvSceneHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 0, cbvDescriptorSize);
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 		cbvDesc.BufferLocation = constantBufferScene->GetGPUVirtualAddress();
-		cbvDesc.SizeInBytes = CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 2);    // CB size is required to be 256-byte aligned.
+		cbvDesc.SizeInBytes = CalculateConstantBufferByteSize(constantBufferSize);    // CB size is required to be 256-byte aligned.
 		// create CBV
 		creator->CreateConstantBufferView(&cbvDesc, cbvSceneHandle);
 
@@ -287,7 +301,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 			nullptr,
 			IID_PPV_ARGS(&structuredBufferAttributesResource));
 
-		structuredBufferAttributeHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
+		structuredBufferAttributeHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
 
 		// srv description
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -311,7 +325,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 			nullptr,
 			IID_PPV_ARGS(&structuredBufferInstanceResource));
 
-		structuredBufferInstanceHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvHeap->GetCPUDescriptorHandleForHeapStart(), 2, cbvDescriptorSize);
+		structuredBufferInstanceHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 2, cbvDescriptorSize);
 
 		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
@@ -321,6 +335,29 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		srvDesc.Buffer.StructureByteStride = sizeof(GW::MATH::GMATRIXF);
 		// create SRV
 		creator->CreateShaderResourceView(structuredBufferInstanceResource.Get(), &srvDesc, structuredBufferInstanceHandle);
+
+		const UINT numLights = currentLevel.uniqueLights.size();
+		// commited resource for the structured buffer
+		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(H2B::LIGHT) * numLights);
+		hr = creator->CreateCommittedResource(
+			&prop,
+			D3D12_HEAP_FLAG_NONE,
+			&resource_desc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&structuredBufferLightResource));
+
+		structuredBufferLightHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 3, cbvDescriptorSize);
+
+		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Buffer.FirstElement = 0;
+		srvDesc.Buffer.NumElements = numLights;
+		srvDesc.Buffer.StructureByteStride = sizeof(H2B::LIGHT);
+		// create SRV
+		creator->CreateShaderResourceView(structuredBufferLightResource.Get(), &srvDesc, structuredBufferLightHandle);
+
 
 		CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
 		hr = constantBufferScene->Map(0, &readRange, reinterpret_cast<void**>(&constantBufferSceneData));
@@ -332,6 +369,10 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		hr = structuredBufferInstanceResource->Map(0, &readRange, reinterpret_cast<void**>(&structuredBufferInstanceData));
 		memcpy(structuredBufferInstanceData, instanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
 		structuredBufferInstanceResource->Unmap(0, nullptr);
+
+		hr = structuredBufferLightResource->Map(0, &readRange, reinterpret_cast<void**>(&structuredBufferLightData));
+		memcpy(structuredBufferLightData, currentLevel.uniqueLights.data(), sizeof(H2B::LIGHT) * numLights);
+		structuredBufferLightResource->Unmap(0, nullptr);
 	}
 
 	UINT compilerFlags = D3DCOMPILE_ENABLE_STRICTNESS;
@@ -344,7 +385,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	// Create Vertex Shader
 	Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, errors;
 	if (FAILED(D3DCompile(vertexShaderString.c_str(), vertexShaderString.length(),
-		nullptr, nullptr, nullptr, "main", "vs_5_1", compilerFlags, 0,
+		nullptr, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_1", compilerFlags, 0,
 		vsBlob.GetAddressOf(), errors.GetAddressOf())))
 	{
 		std::cout << (char*)errors->GetBufferPointer() << std::endl;
@@ -353,7 +394,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	// Create Pixel Shader
 	Microsoft::WRL::ComPtr<ID3DBlob> psBlob; errors.Reset();
 	if (FAILED(D3DCompile(pixelShaderString.c_str(), pixelShaderString.length(),
-		nullptr, nullptr, nullptr, "main", "ps_5_1", compilerFlags, 0,
+		nullptr, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_1", compilerFlags, 0,
 		psBlob.GetAddressOf(), errors.GetAddressOf())))
 	{
 		std::cout << (char*)errors->GetBufferPointer() << std::endl;
@@ -370,11 +411,12 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	//CD3DX12_DESCRIPTOR_RANGE ranges[1] = {};
 	//ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0);
 
-	CD3DX12_ROOT_PARAMETER rootParameters[4] = {};
-	rootParameters[0].InitAsConstants(2, 0, 0);			// num32bitConstants, register, space  (mesh_id) b0
-	rootParameters[1].InitAsConstantBufferView(1, 0);	// register, space	(view,projection) b1
-	rootParameters[2].InitAsShaderResourceView(0, 0);	// register, space	(OBJ_ATTRIBUTES) t0
-	rootParameters[3].InitAsShaderResourceView(1, 0);	// register, space	(instance matrix data) t1
+	CD3DX12_ROOT_PARAMETER rootParameters[5] = {};
+	rootParameters[0].InitAsConstants(2, 0, 0);			// num32bitConstants, register, space  (mesh_id)	b0
+	rootParameters[1].InitAsConstantBufferView(1, 0);	// register, space	(view,projection)				b1
+	rootParameters[2].InitAsShaderResourceView(0, 0);	// register, space	(OBJ_ATTRIBUTES)				t0
+	rootParameters[3].InitAsShaderResourceView(1, 0);	// register, space	(instance matrix data)			t1
+	rootParameters[4].InitAsShaderResourceView(2, 0);	// register, space	(light data)					t2
 	//rootParameters[4].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
 	
 
@@ -434,15 +476,17 @@ VOID Renderer::Render()
 	cmd->SetPipelineState(pipeline.Get());
 
 	// now we can draw
-	D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(GW::MATH::GMATRIXF) * 2);
+	D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
 	D3D12_GPU_VIRTUAL_ADDRESS srvAttributesHandle = structuredBufferAttributesResource->GetGPUVirtualAddress() + 0U * (sizeof(H2B::ATTRIBUTES));
 	D3D12_GPU_VIRTUAL_ADDRESS srvInstanceHandle = structuredBufferInstanceResource->GetGPUVirtualAddress() + 0U * sizeof(GW::MATH::GMATRIXF);
+	D3D12_GPU_VIRTUAL_ADDRESS srvLightHandle = structuredBufferLightResource->GetGPUVirtualAddress() + 0U * sizeof(H2B::LIGHT);
 	cmd->IASetVertexBuffers(0, 1, &vertexView);
 	cmd->IASetIndexBuffer(&indexView);
 	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	cmd->SetGraphicsRootConstantBufferView(1, cbvHandle);
 	cmd->SetGraphicsRootShaderResourceView(2, srvAttributesHandle);
 	cmd->SetGraphicsRootShaderResourceView(3, srvInstanceHandle);
+	cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
 
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
@@ -461,6 +505,15 @@ VOID Renderer::Update(FLOAT deltaTime)
 {
 	UpdateCamera(deltaTime);
 
-	memcpy(&constantBufferSceneData[0], &viewMatrix, sizeof(GW::MATH::GMATRIXF));
-	memcpy(&constantBufferSceneData[1], &projectionMatrix, sizeof(GW::MATH::GMATRIXF));
+	GW::MATH::GVECTORF campos = worldCamera.row4;
+	campos.w = currentLevel.uniqueLights.size();
+	SCENE scene =
+	{
+		viewMatrix,
+		projectionMatrix,
+		campos
+	};
+
+	memcpy(constantBufferSceneData, &scene, sizeof(SCENE));
+	
 }

@@ -16,8 +16,6 @@ if(WIN32)
 		source/main.cpp
 		source/renderer.h
 		source/d3dx12.h
-		source/xtime.h
-		source/xtime.cpp
 		source/chronotimer.h
 		source/structures.h
 		source/level.h
@@ -48,7 +46,7 @@ if(WIN32)
 	# The produced .h files can be included and contain the compiled shader byte code
 	set_source_files_properties( ${VERTEX_SHADERS} PROPERTIES 
 		VS_SHADER_TYPE Vertex 
-		VS_SHADER_MODEL 6.0 
+		VS_SHADER_MODEL 5.1 
 		VS_SHADER_ENTRYPOINT main 
 		#VS_TOOL_OVERRIDE "None"
 		#VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
@@ -57,7 +55,7 @@ if(WIN32)
 	)
 	set_source_files_properties( ${PIXEL_SHADERS} PROPERTIES 
 		VS_SHADER_TYPE Pixel 
-		VS_SHADER_MODEL 6.0 
+		VS_SHADER_MODEL 5.1 
 		VS_SHADER_ENTRYPOINT main
 		#VS_TOOL_OVERRIDE "None"
 		#VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
