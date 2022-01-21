@@ -29,7 +29,7 @@ float4 main(PS_IN input) : SV_TARGET
     
     SURFACE surface = (SURFACE) 0;
     surface.position = input.wpos.xyz;
-    surface.normal = input.nrm;
+    surface.normal = normalize(input.nrm);
     
     float4 luminance = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 specular = float4(0.0f, 0.0f, 0.0f, 0.0f);

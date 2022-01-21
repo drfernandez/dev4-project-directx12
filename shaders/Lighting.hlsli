@@ -87,8 +87,8 @@ float4 CalculateSpecular(ATTRIBUTES mat, LIGHT light, SURFACE surface, float3 ca
     };
     
     float inLight = dot(toLight, surface.normal.xyz);
-    float3 reflec = reflect(-toLight, surface.normal);
-    float specIntensity = saturate(pow(abs(dot(toCam, reflec)), specPower));
+    float3 reflec = normalize(reflect(-toLight, surface.normal));
+    float specIntensity = pow(saturate(dot(toCam, reflec)), specPower);
     float4 spec = float4(light.color.xyz * mat.Ks * specIntensity * attenuation * inLight, 0.0f);
     return spec;
 };

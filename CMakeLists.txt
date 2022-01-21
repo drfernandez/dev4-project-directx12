@@ -15,6 +15,7 @@ if(WIN32)
 		source/gateware.h
 		source/main.cpp
 		source/renderer.h
+		source/renderer.cpp
 		source/d3dx12.h
 		source/chronotimer.h
 		source/structures.h
