@@ -1,56 +1,114 @@
 #include "level.h"
 
+#define USE_GFILE FALSE
+
 Level::Level()
 {
 	Clear();
 	mm = MaterialManager::GetInstance();
 	mm->Initialize();
+	in.Create();
 }
 
 Level::~Level()
 {
 	Clear();
 	mm->Shutdown();
+	in.CloseFile();
 }
 
 BOOL Level::LoadLevel(const std::string& filepath)
 {
-	Clear();
-	std::string name = "../levels/" + GetFileName(filepath) + ".txt";
-	if (input.is_open()) input.close();
-	input.open(name.c_str(), std::ios_base::in);
-	if (!input.is_open()) return FALSE;
-	name = GetFileName(filepath);
-	while (!input.eof())
-	{
-		char buffer[256] = { 0 };
-		input.getline(buffer, 256);
-		if (strcmp(buffer, "MESH") == 0) 
-			LoadMeshFromFile();
-		else if (strcmp(buffer, "LIGHT") == 0) 
-			LoadLightFromFile();
-		else if (strcmp(buffer, "CAMERA") == 0) 
-			LoadCameraFromFile();
-	}
 
-	UINT meshID = 0;
-	for (auto& mesh : uniqueMeshes)
+#if !USE_GFILE
 	{
-		mesh.second.meshID = meshID;
-		for (const auto& matrix : mesh.second.matrices)
+		Clear();
+		std::string name = "../levels/" + GetFileName(filepath) + ".txt";
+		if (input.is_open())
 		{
-			meshID++;
+			input.close();
+		}
+		input.open(name.c_str(), std::ios_base::in);
+		if (!input.is_open())
+		{
+			return FALSE;
+		}
+		name = GetFileName(filepath);
+		while (!input.eof())
+		{
+			char buffer[256] = { 0 };
+			input.getline(buffer, 256);
+			if (strcmp(buffer, "MESH") == 0)
+			{
+				LoadMeshFromFile();
+			}
+			else if (strcmp(buffer, "LIGHT") == 0)
+			{
+				LoadLightFromFile();
+			}
+			else if (strcmp(buffer, "CAMERA") == 0)
+			{
+				LoadCameraFromFile();
+			}
+		}
+
+		UINT meshID = 0;
+		for (auto& mesh : uniqueMeshes)
+		{
+			mesh.second.meshID = meshID;
+			for (const auto& matrix : mesh.second.matrices)
+			{
+				meshID++;
+			}
+		}
+		for (auto& skybox : uniqueSkyboxes)
+		{
+			skybox.second.meshID = meshID;
+			for (const auto& matrix : skybox.second.matrices)
+			{
+				meshID++;
+			}
+		}
+		input.close();
+	}
+#else
+	{
+		Clear();
+		std::string name = "../levels/" + GetFileName(filepath) + ".txt";
+		if (+in.OpenBinaryRead(name.c_str()))
+		{
+			this->name = GetFileName(name);
+			bool eof = false;
+			while (!eof)
+			{
+				char buffer[256] = { 0 };
+				in.ReadLine(buffer, 256, '\n');
+				in.Read(buffer, 256);
+
+				int d = 0;
+			}
+			UINT meshID = 0;
+			for (auto& mesh : uniqueMeshes)
+			{
+				mesh.second.meshID = meshID;
+				for (const auto& matrix : mesh.second.matrices)
+				{
+					meshID++;
+				}
+			}
+			for (auto& skybox : uniqueSkyboxes)
+			{
+				skybox.second.meshID = meshID;
+				for (const auto& matrix : skybox.second.matrices)
+				{
+					meshID++;
+				}
+			}
+			in.CloseFile();
 		}
 	}
-	for (auto& skybox : uniqueSkyboxes)
-	{
-		skybox.second.meshID = meshID;
-		for (const auto& matrix : skybox.second.matrices)
-		{
-			meshID++;
-		}
-	}
-	input.close();
+#endif
+
 	return TRUE;
 }
 

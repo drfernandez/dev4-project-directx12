@@ -10,6 +10,7 @@ class Level
 {
 private:
 	std::ifstream input;
+	GW::SYSTEM::GFile in;
 
 	BOOL FileExists(std::string file);
 	std::string GetFileName(std::string file);
