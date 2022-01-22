@@ -13,6 +13,7 @@ public:
 	VOID Shutdown();
 	UINT GetMaterialID(const H2B::MATERIAL2& mat);
 	H2B::MATERIAL2 GetMaterial(const UINT index);
+	VOID Clear();
 
 	UINT material_count;
 	std::vector<H2B::MATERIAL2> materials;
@@ -23,6 +24,5 @@ private:
 	~MaterialManager();
 	MaterialManager(const MaterialManager& c);
 	MaterialManager& operator=(const MaterialManager& c);
-	VOID Clear();
 
 };

@@ -8,6 +8,8 @@
 //#include "FSLogo.h"
 #include "level.h"
 
+#define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }
+
 struct SCENE
 {
 	GW::MATH::GMATRIXF view;
@@ -70,6 +72,8 @@ private:
 	UINT CalculateConstantBufferByteSize(UINT byteSize);
 	std::string ShaderAsString(const CHAR* shaderFilePath);
 	VOID UpdateCamera(FLOAT deltaTime);
+	VOID ReleaseLevelData();
+	BOOL LoadLevelDataFromFile(ID3D12Device* creator, const std::string& filename);
 
 public:
 	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d);
@@ -176,56 +180,48 @@ VOID Renderer::UpdateCamera(FLOAT deltaTime)
 		projectionMatrix);
 }
 
-Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d)
+VOID Renderer::ReleaseLevelData()
 {
-	win = _win;
-	d3d = _d3d;
-	ID3D12Device* creator;
-	d3d.GetDevice((void**)&creator);
+	currentLevel.Clear();
+	currentLevel.mm->Clear();
 
-	matrixProxy.Create();
-	kbmProxy.Create(_win);
-	controllerProxy.Create();
+	vertexView = { 0 };
+	indexView = { 0 };
+	D3D12_SAFE_RELEASE(vertexBuffer);
+	D3D12_SAFE_RELEASE(indexBuffer);
+	D3D12_SAFE_RELEASE(constantBufferScene);
+	D3D12_SAFE_RELEASE(structuredBufferAttributesResource);
+	D3D12_SAFE_RELEASE(structuredBufferInstanceResource);
+	D3D12_SAFE_RELEASE(structuredBufferLightResource);
+	attributesData.clear();
+	instanceData.clear();
+	lightData.clear();
+
+}
+
+BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& filename)
+{
+	ReleaseLevelData();
+	int d = 0;
+
+	BOOL loaded = currentLevel.LoadLevel(filename);
+
+	for (const auto& m : currentLevel.uniqueMeshes)
+	{
+		for (const auto& matrix : m.second.matrices)
+		{
+			instanceData.push_back(matrix);
+		}
+	}
+
+	MaterialManager* mm = currentLevel.mm;
+	for (UINT i = 0; i < mm->material_count; i++)
+	{
+		H2B::MATERIAL2 mat = H2B::MATERIAL2(mm->GetMaterial(i));
+		attributesData.push_back(mat.attrib);
+	}
 
 	HRESULT hr = E_NOTIMPL;
-
-	{
-		identityMatrix = GW::MATH::GIdentityMatrixF;
-
-		bool levelLoaded = currentLevel.LoadLevel("../levels/Modular Dungeon 3.txt");
-
-		for (const auto& m : currentLevel.uniqueMeshes)
-		{
-			for (const auto& matrix : m.second.matrices)
-			{
-				instanceData.push_back(matrix);
-			}
-		}
-
-		MaterialManager* mm = currentLevel.mm;
-		for (UINT i = 0; i < mm->material_count; i++)
-		{
-			H2B::MATERIAL2 mat = H2B::MATERIAL2(mm->GetMaterial(i));
-			attributesData.push_back(mat.attrib);
-		}
-	}
-
-	{
-		//// view and projection creation
-		//GW::MATH::GVECTORF eye = { 0.75f, 0.25f, -1.5f, 0.0f };
-		//GW::MATH::GVECTORF at = { 0.15f, 0.75f, 0.0f, 0.0f };
-		//GW::MATH::GVECTORF up = { 0.0f, 1.0f, 0.0f, 0.0f };
-		//matrixProxy.LookAtLHF(eye, at, up, viewMatrix);
-		//matrixProxy.InverseF(viewMatrix, worldCamera);
-		worldCamera = currentLevel.camera;
-
-		float fov = G_DEGREE_TO_RADIAN(65);
-		float zn = 0.1f;
-		float zf = 100.0f;
-		float aspect = 0.0f;
-		d3d.GetAspectRatio(aspect);
-		matrixProxy.ProjectionDirectXLHF(fov, aspect, zn, zf, projectionMatrix);
-	}
 
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -394,6 +390,47 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		memcpy(structuredBufferLightData, currentLevel.uniqueLights.data(), sizeof(H2B::LIGHT) * numLights);
 		structuredBufferLightResource->Unmap(0, nullptr);
 	}
+
+	return loaded;
+}
+
+Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d)
+{
+	win = _win;
+	d3d = _d3d;
+	ID3D12Device* creator;
+	d3d.GetDevice((void**)&creator);
+
+	matrixProxy.Create();
+	kbmProxy.Create(_win);
+	controllerProxy.Create();
+
+	HRESULT hr = E_NOTIMPL;
+
+	{
+		identityMatrix = GW::MATH::GIdentityMatrixF;
+		std::string levelName = "../levels/Modular Dungeon 3.txt";
+
+		if (LoadLevelDataFromFile(creator, levelName))
+		{
+			int d = 0;
+		}
+
+	}
+
+	{
+		// view and projection creation
+		worldCamera = currentLevel.camera;
+
+		float fov = G_DEGREE_TO_RADIAN(65);
+		float zn = 0.1f;
+		float zf = 100.0f;
+		float aspect = 0.0f;
+		d3d.GetAspectRatio(aspect);
+		matrixProxy.ProjectionDirectXLHF(fov, aspect, zn, zf, projectionMatrix);
+	}
+
+
 
 	UINT compilerFlags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
 #if _DEBUG

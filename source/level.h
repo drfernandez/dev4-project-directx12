@@ -30,7 +30,7 @@ public:
 	std::map<std::string, H2B::INSTANCED_MESH> uniqueMeshes;
 	std::map<std::string, H2B::INSTANCED_MESH> uniqueSkyboxes;
 	std::vector<H2B::LIGHT> uniqueLights;
-	MaterialManager* mm;
+	MaterialManager* mm = nullptr;
 
 	Level();
 	~Level();

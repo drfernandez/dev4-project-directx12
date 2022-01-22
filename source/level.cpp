@@ -4,17 +4,17 @@
 
 Level::Level()
 {
-	Clear();
 	mm = MaterialManager::GetInstance();
 	mm->Initialize();
+	Clear();
 	in.Create();
 }
 
 Level::~Level()
 {
-	Clear();
-	mm->Shutdown();
 	in.CloseFile();
+	mm->Shutdown();
+	Clear();
 }
 
 BOOL Level::LoadLevel(const std::string& filepath)
@@ -114,8 +114,12 @@ BOOL Level::LoadLevel(const std::string& filepath)
 
 void Level::Clear()
 {
-	if (input.is_open()) input.close();
+	if (input.is_open())
+	{
+		input.close();
+	}
 	name.clear();
+	camera = GW::MATH::GIdentityMatrixF;
 	vertex_count = 0;
 	index_count = 0;
 	vertices.clear();
@@ -123,7 +127,10 @@ void Level::Clear()
 	uniqueMeshes.clear();
 	uniqueSkyboxes.clear();
 	uniqueLights.clear();
-	camera = GW::MATH::GIdentityMatrixF;
+	if (mm)
+	{
+		mm->Clear();
+	}
 }
 
 BOOL Level::FileExists(std::string file)
