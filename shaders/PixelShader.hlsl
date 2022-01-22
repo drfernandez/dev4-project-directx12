@@ -34,7 +34,8 @@ float4 main(PS_IN input) : SV_TARGET
     float4 luminance = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 specular = float4(0.0f, 0.0f, 0.0f, 0.0f);
     
-    for (uint i = 0; i < uint(cameraPosition.w); i++)
+    uint numLights = uint(cameraPosition.w);
+    for (uint i = 0; i < numLights; i++)
     {
         LIGHT light = LightData[i];
         luminance += CalculateLight(material, light, surface);

@@ -1,6 +1,5 @@
 #include "level.h"
 
-#define USE_GFILE FALSE
 
 Level::Level()
 {
@@ -19,95 +18,61 @@ Level::~Level()
 
 BOOL Level::LoadLevel(const std::string& filepath)
 {
-
-#if !USE_GFILE
+	Clear();
+	std::string name = "../levels/" + GetFileName(filepath) + ".txt";
+	if (input.is_open())
 	{
-		Clear();
-		std::string name = "../levels/" + GetFileName(filepath) + ".txt";
-		if (input.is_open())
-		{
-			input.close();
-		}
-		input.open(name.c_str(), std::ios_base::in);
-		if (!input.is_open())
-		{
-			return FALSE;
-		}
-		name = GetFileName(filepath);
-		while (!input.eof())
-		{
-			char buffer[256] = { 0 };
-			input.getline(buffer, 256);
-			if (strcmp(buffer, "MESH") == 0)
-			{
-				LoadMeshFromFile();
-			}
-			else if (strcmp(buffer, "LIGHT") == 0)
-			{
-				LoadLightFromFile();
-			}
-			else if (strcmp(buffer, "CAMERA") == 0)
-			{
-				LoadCameraFromFile();
-			}
-		}
-
-		UINT meshID = 0;
-		for (auto& mesh : uniqueMeshes)
-		{
-			mesh.second.meshID = meshID;
-			for (const auto& matrix : mesh.second.matrices)
-			{
-				meshID++;
-			}
-		}
-		for (auto& skybox : uniqueSkyboxes)
-		{
-			skybox.second.meshID = meshID;
-			for (const auto& matrix : skybox.second.matrices)
-			{
-				meshID++;
-			}
-		}
 		input.close();
 	}
-#else
+	input.open(name.c_str(), std::ios_base::in);
+	if (!input.is_open())
 	{
-		Clear();
-		std::string name = "../levels/" + GetFileName(filepath) + ".txt";
-		if (+in.OpenBinaryRead(name.c_str()))
+		return FALSE;
+	}
+	name = GetFileName(filepath);
+	while (!input.eof())
+	{
+		char buffer[256] = { 0 };
+		input.getline(buffer, 256);
+		if (strcmp(buffer, "MESH") == 0)
 		{
-			this->name = GetFileName(name);
-			bool eof = false;
-			while (!eof)
-			{
-				char buffer[256] = { 0 };
-				in.ReadLine(buffer, 256, '\n');
-				in.Read(buffer, 256);
-
-				int d = 0;
-			}
-			UINT meshID = 0;
-			for (auto& mesh : uniqueMeshes)
-			{
-				mesh.second.meshID = meshID;
-				for (const auto& matrix : mesh.second.matrices)
-				{
-					meshID++;
-				}
-			}
-			for (auto& skybox : uniqueSkyboxes)
-			{
-				skybox.second.meshID = meshID;
-				for (const auto& matrix : skybox.second.matrices)
-				{
-					meshID++;
-				}
-			}
-			in.CloseFile();
+			LoadMeshFromFile();
+		}
+		else if (strcmp(buffer, "LIGHT") == 0)
+		{
+			LoadLightFromFile();
+		}
+		else if (strcmp(buffer, "CAMERA") == 0)
+		{
+			LoadCameraFromFile();
 		}
 	}
-#endif
+	input.close();
+
+	UINT meshID = 0;
+	for (auto& mesh : uniqueMeshes)
+	{
+		mesh.second.meshID = meshID;
+		for (const auto& matrix : mesh.second.matrices)
+		{
+			meshID++;
+		}
+	}
+	for (auto& skybox : uniqueSkyboxes)
+	{
+		skybox.second.meshID = meshID;
+		for (const auto& matrix : skybox.second.matrices)
+		{
+			meshID++;
+		}
+	}
+	for (const auto& m : uniqueMeshes)
+	{
+		for (const auto& matrix : m.second.matrices)
+		{
+			instanceData.push_back(matrix);
+		}
+	}
 
 	return TRUE;
 }
@@ -127,6 +92,7 @@ void Level::Clear()
 	uniqueMeshes.clear();
 	uniqueSkyboxes.clear();
 	uniqueLights.clear();
+	instanceData.clear();
 	if (mm)
 	{
 		mm->Clear();
@@ -135,7 +101,6 @@ void Level::Clear()
 
 BOOL Level::FileExists(std::string file)
 {
-	
 	std::ifstream in;
 	in.open(file, std::ios_base::in);
 	BOOL result = in.is_open();
@@ -258,8 +223,6 @@ BOOL Level::LoadH2B(const std::string& h2bFilePath, H2B::INSTANCED_MESH& instanc
 		vertex_count += p.vertexCount;
 		index_count += p.indexCount;
 
-
-
 		success = TRUE;
 	}
 
@@ -277,25 +240,27 @@ void Level::LoadMeshFromFile()
 	std::string assetName = GetFileName(buffer);
 	std::string path = "../assets/" + assetName + ".h2b";
 
-	H2B::INSTANCED_MESH instancedMesh = {};
-	if (FileExists(path) && LoadH2B(path, instancedMesh))
-	{
-		instancedMesh.meshName = assetName;
-		instancedMesh.numInstances = 1;
-		instancedMesh.matrices.push_back(world);
-	}
-
 	auto& container = (assetName == "Skybox") ? uniqueSkyboxes : uniqueMeshes;
-	auto containerIter = container.find(assetName);
-	if (containerIter == container.end())
+
+	H2B::INSTANCED_MESH instancedMesh = H2B::INSTANCED_MESH();
+	bool exists = FileExists(path);
+	bool isUnique = IsUniqueMesh(container, assetName);
+	if (exists && isUnique)
 	{
-		container[assetName] = instancedMesh;
+		if (LoadH2B(path, instancedMesh))
+		{
+			instancedMesh.meshName = assetName;
+			instancedMesh.numInstances = 1;
+			instancedMesh.matrices.push_back(world);
+			container[assetName] = instancedMesh;
+		}
 	}
-	else
+	else if (exists && !isUnique)
 	{
 		container[assetName].numInstances += 1;
 		container[assetName].matrices.push_back(world);
-	}	
+	}
+	
 }
 
 void Level::LoadLightFromFile()
@@ -325,4 +290,15 @@ void Level::LoadCameraFromFile()
 	input.getline(buffer, 256);
 	GW::MATH::GMATRIXF information = ReadMatrixData();
 	camera = information;
+}
+
+BOOL Level::IsUniqueMesh(std::map<std::string, H2B::INSTANCED_MESH>& container, const std::string& assetName)
+{
+	BOOL IsUnique = TRUE;
+	auto containerIter = container.find(assetName);
+	if (containerIter != container.end())
+	{
+		IsUnique = FALSE;
+	}
+	return IsUnique;
 }

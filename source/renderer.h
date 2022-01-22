@@ -1,5 +1,6 @@
 #pragma once
 
+#include <commdlg.h>
 // minimalistic code to draw a single triangle, this is not part of the API.
 // required for compiling shaders on the fly, consider pre-compiling instead
 #include <d3dcompiler.h>
@@ -29,7 +30,7 @@ private:
 	GW::INPUT::GController							controllerProxy;
 	GW::INPUT::GBufferedInput						bufferedInput;
 	GW::CORE::GEventResponder						eventResponder;
-	BOOL											dialogBoxOpen;
+	bool											dialogBoxOpen;
 
 	GW::MATH::GMatrix								matrixProxy;
 	GW::MATH::GMATRIXF								identityMatrix;
@@ -55,25 +56,24 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferAttributesResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferAttributeHandle;
 	H2B::ATTRIBUTES*								structuredBufferAttributesData;
-	std::vector<H2B::ATTRIBUTES>					attributesData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferInstanceResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferInstanceHandle;
 	GW::MATH::GMATRIXF*								structuredBufferInstanceData;
-	std::vector<GW::MATH::GMATRIXF>					instanceData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferLightResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferLightHandle;
 	H2B::LIGHT*										structuredBufferLightData;
-	std::vector<H2B::LIGHT>							lightData;
 
 	Level											currentLevel;
 
 	UINT CalculateConstantBufferByteSize(UINT byteSize);
 	std::string ShaderAsString(const CHAR* shaderFilePath);
+
 	VOID UpdateCamera(FLOAT deltaTime);
-	VOID ReleaseLevelData();
+	VOID ReleaseLevelResources();
 	BOOL LoadLevelDataFromFile(ID3D12Device* creator, const std::string& filename);
+	bool OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandle, std::string& fileName);
 
 public:
 	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d);
@@ -102,6 +102,7 @@ std::string Renderer::ShaderAsString(const CHAR* shaderFilePath)
 	}
 	return output;
 }
+
 
 VOID Renderer::UpdateCamera(FLOAT deltaTime)
 {
@@ -157,21 +158,20 @@ VOID Renderer::UpdateCamera(FLOAT deltaTime)
 	}
 	if (mouse_moved || aim_up_down_changed)
 	{
-		FLOAT total_pitch = G_DEGREE_TO_RADIAN(65.0f) * mouse_y_delta / static_cast<FLOAT>(screen_height) + controllerState[G_RY_AXIS] * thumb_speed;
+		FLOAT total_pitch = G_DEGREE_TO_RADIAN(65.0f) * (mouse_y_delta / static_cast<FLOAT>(screen_height)) + (controllerState[G_RY_AXIS] * thumb_speed);
 		GW::MATH::GMATRIXF x_rotation = GW::MATH::GIdentityMatrixF;
 		matrixProxy.RotateXLocalF(x_rotation, total_pitch, x_rotation);
 		matrixProxy.MultiplyMatrixF(x_rotation, worldCamera, worldCamera);
 	}
 	if (mouse_moved || aim_left_right_changed)
 	{
-		FLOAT total_yaw = G_DEGREE_TO_RADIAN(65.0f) * aspect_ratio * mouse_x_delta / static_cast<FLOAT>(screen_width) + controllerState[G_RX_AXIS] * thumb_speed;
+		FLOAT total_yaw = G_DEGREE_TO_RADIAN(65.0f) * aspect_ratio * (mouse_x_delta / static_cast<FLOAT>(screen_width)) + (controllerState[G_RX_AXIS] * thumb_speed);
 		GW::MATH::GMATRIXF y_rotation = GW::MATH::GIdentityMatrixF;
 		matrixProxy.RotateYLocalF(y_rotation, total_yaw, y_rotation);
 		GW::MATH::GVECTORF position = worldCamera.row4;
 		matrixProxy.MultiplyMatrixF(worldCamera, y_rotation, worldCamera);
 		worldCamera.row4 = position;
 	}
-
 
 	// end of camera update
 	matrixProxy.InverseF(worldCamera, viewMatrix);
@@ -180,46 +180,41 @@ VOID Renderer::UpdateCamera(FLOAT deltaTime)
 		projectionMatrix);
 }
 
-VOID Renderer::ReleaseLevelData()
+VOID Renderer::ReleaseLevelResources()
 {
 	currentLevel.Clear();
-	currentLevel.mm->Clear();
+	if (currentLevel.mm)
+	{
+		currentLevel.mm->Clear();
+	}
 
 	vertexView = { 0 };
 	indexView = { 0 };
+
+
 	D3D12_SAFE_RELEASE(vertexBuffer);
 	D3D12_SAFE_RELEASE(indexBuffer);
 	D3D12_SAFE_RELEASE(constantBufferScene);
 	D3D12_SAFE_RELEASE(structuredBufferAttributesResource);
 	D3D12_SAFE_RELEASE(structuredBufferInstanceResource);
 	D3D12_SAFE_RELEASE(structuredBufferLightResource);
-	attributesData.clear();
-	instanceData.clear();
-	lightData.clear();
-
+	constantBufferSceneData = nullptr;
+	structuredBufferAttributesData = nullptr;
+	structuredBufferInstanceData = nullptr;
+	structuredBufferLightData = nullptr;
 }
 
 BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& filename)
 {
-	ReleaseLevelData();
-	int d = 0;
+	ReleaseLevelResources();
 
-	BOOL loaded = currentLevel.LoadLevel(filename);
-
-	for (const auto& m : currentLevel.uniqueMeshes)
+	if (!currentLevel.LoadLevel(filename))
 	{
-		for (const auto& matrix : m.second.matrices)
-		{
-			instanceData.push_back(matrix);
-		}
+		return FALSE;
 	}
 
-	MaterialManager* mm = currentLevel.mm;
-	for (UINT i = 0; i < mm->material_count; i++)
-	{
-		H2B::MATERIAL2 mat = H2B::MATERIAL2(mm->GetMaterial(i));
-		attributesData.push_back(mat.attrib);
-	}
+	worldCamera = currentLevel.camera;
+
 
 	HRESULT hr = E_NOTIMPL;
 
@@ -227,14 +222,13 @@ BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& f
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// vertex buffer creation
 		UINT vertexBufferSize = sizeof(H2B::VERTEX) * currentLevel.vertex_count;
-		creator->CreateCommittedResource( // using UPLOAD heap for simplicity
+		hr = creator->CreateCommittedResource( // using UPLOAD heap for simplicity
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), // DEFAULT recommend  
 			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
 			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer));
 
 		UINT8* transferMemoryLocation = nullptr;
-		vertexBuffer->Map(0, &CD3DX12_RANGE(0, 0),
-			reinterpret_cast<void**>(&transferMemoryLocation));
+		hr = vertexBuffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&transferMemoryLocation));
 		memcpy(transferMemoryLocation, currentLevel.vertices.data(), vertexBufferSize);
 		vertexBuffer->Unmap(0, nullptr);
 		// Create a vertex View to send to a Draw() call.
@@ -247,14 +241,13 @@ BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& f
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// index buffer creation
 		UINT indexBufferSize = sizeof(UINT) * currentLevel.index_count;
-		creator->CreateCommittedResource(
+		hr = creator->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
 			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize),
 			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&indexBuffer));
 
 		UINT8* transferMemoryLocation = nullptr;
-		indexBuffer->Map(0, &CD3DX12_RANGE(0, 0),
-			reinterpret_cast<void**>(&transferMemoryLocation));
+		hr = indexBuffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&transferMemoryLocation));
 		memcpy(transferMemoryLocation, currentLevel.indices.data(), indexBufferSize);
 		indexBuffer->Unmap(0, nullptr);
 		indexView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
@@ -270,7 +263,7 @@ BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& f
 		cbvsrvuavHeapDesc.NumDescriptors = 4;		// X number of descriptors to create from cbv_srv_uav heap
 		cbvsrvuavHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		cbvsrvuavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		creator->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(cbvsrvuavHeap.ReleaseAndGetAddressOf()));
+		hr = creator->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(cbvsrvuavHeap.ReleaseAndGetAddressOf()));
 
 		cbvDescriptorSize = creator->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -326,7 +319,7 @@ BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& f
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// instance data for matrices
-		const UINT numInstances = instanceData.size();
+		const UINT numInstances = currentLevel.instanceData.size();
 		// commited resource for the structured buffer
 		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(GW::MATH::GMATRIXF) * numInstances);
 		hr = creator->CreateCommittedResource(
@@ -374,53 +367,128 @@ BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& f
 		creator->CreateShaderResourceView(structuredBufferLightResource.Get(), &srvDesc, structuredBufferLightHandle);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
+		if (constantBufferScene)
+		{
+			hr = constantBufferScene->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&constantBufferSceneData));
+		}
 
-		CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
-		hr = constantBufferScene->Map(0, &readRange, reinterpret_cast<void**>(&constantBufferSceneData));
+		if (structuredBufferAttributesResource)
+		{
+			hr = structuredBufferAttributesResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&structuredBufferAttributesData));
+			if (SUCCEEDED(hr))
+			{
+				memcpy(structuredBufferAttributesData, currentLevel.mm->materials.data(), sizeof(H2B::ATTRIBUTES) * numAttributes);
+				structuredBufferAttributesResource->Unmap(0, nullptr);
+			}
+		}
 
-		hr = structuredBufferAttributesResource->Map(0, &readRange, reinterpret_cast<void**>(&structuredBufferAttributesData));
-		memcpy(structuredBufferAttributesData, attributesData.data(), sizeof(H2B::ATTRIBUTES) * numAttributes);
-		structuredBufferAttributesResource->Unmap(0, nullptr);
+		if (structuredBufferInstanceResource)
+		{
+			hr = structuredBufferInstanceResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&structuredBufferInstanceData));
+			if (SUCCEEDED(hr))
+			{
+				memcpy(structuredBufferInstanceData, currentLevel.instanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
+				structuredBufferInstanceResource->Unmap(0, nullptr);
+			}
+		}
 
-		hr = structuredBufferInstanceResource->Map(0, &readRange, reinterpret_cast<void**>(&structuredBufferInstanceData));
-		memcpy(structuredBufferInstanceData, instanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
-		structuredBufferInstanceResource->Unmap(0, nullptr);
-
-		hr = structuredBufferLightResource->Map(0, &readRange, reinterpret_cast<void**>(&structuredBufferLightData));
-		memcpy(structuredBufferLightData, currentLevel.uniqueLights.data(), sizeof(H2B::LIGHT) * numLights);
-		structuredBufferLightResource->Unmap(0, nullptr);
+		if (structuredBufferLightResource)
+		{
+			hr = structuredBufferLightResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&structuredBufferLightData));
+			if (SUCCEEDED(hr))
+			{
+				memcpy(structuredBufferLightData, currentLevel.uniqueLights.data(), sizeof(H2B::LIGHT) * numLights);
+				structuredBufferLightResource->Unmap(0, nullptr);
+			}
+		}
 	}
 
-	return loaded;
+	return TRUE;
+}
+
+
+bool Renderer::OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandle, std::string& fileName)
+{
+	bool result = false;
+	OPENFILENAME ofn = { 0 };       // common dialog box structure
+	WCHAR szFile[260];       // buffer for file name 
+	//HWND hwnd;              // owner window
+
+	// Initialize OPENFILENAME
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = (HWND)windowHandle.window;
+	ofn.lpstrFile = szFile;
+	// Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
+	// use the contents of szFile to initialize itself.
+	ofn.lpstrFile[0] = '\0';
+	ofn.nMaxFile = sizeof(szFile);
+	ofn.lpstrFilter = L"Text\0*.TXT\0";
+	ofn.nFilterIndex = 1;
+	ofn.lpstrFileTitle = NULL;
+	ofn.nMaxFileTitle = 0;
+	ofn.lpstrInitialDir = NULL;
+	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+	// Display the Open dialog box. 
+
+	if (GetOpenFileNameW(&ofn) == TRUE)
+	{
+		std::wstring ws(ofn.lpstrFile);
+		fileName = std::string(ws.begin(), ws.end());
+		result = true;
+	}
+	return result;
 }
 
 Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d)
 {
+	dialogBoxOpen = false;
+
 	win = _win;
 	d3d = _d3d;
 	ID3D12Device* creator;
 	d3d.GetDevice((void**)&creator);
 
 	matrixProxy.Create();
-	kbmProxy.Create(_win);
+	kbmProxy.Create(win);
 	controllerProxy.Create();
+	bufferedInput.Create(win);
+
+	GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE uwh;
+	+win.GetWindowHandle(uwh);
+
+	ReleaseLevelResources();
+
+	+eventResponder.Create([=](const GW::GEvent& e)
+		{
+			GW::INPUT::GBufferedInput::Events q;
+			GW::INPUT::GBufferedInput::EVENT_DATA qd;
+			bool bReadIsGood = +e.Read(q, qd);
+			bool bBufferedInputKey1 = (q == GW::INPUT::GBufferedInput::Events::KEYRELEASED && qd.data == G_KEY_1);
+			if (bReadIsGood && bBufferedInputKey1 && !dialogBoxOpen)
+			{
+				dialogBoxOpen = true;
+				std::string levelName = std::string("");
+				if (OpenFileDialogBox(uwh, levelName))
+				{
+					//vkDeviceWaitIdle(device);
+					LoadLevelDataFromFile(creator, levelName);
+				}
+				dialogBoxOpen = false;
+			}
+		});
+	+bufferedInput.Register(eventResponder);
+
 
 	HRESULT hr = E_NOTIMPL;
 
 	{
 		identityMatrix = GW::MATH::GIdentityMatrixF;
-		std::string levelName = "../levels/Modular Dungeon 3.txt";
-
-		if (LoadLevelDataFromFile(creator, levelName))
-		{
-			int d = 0;
-		}
-
 	}
 
 	{
 		// view and projection creation
-		worldCamera = currentLevel.camera;
 
 		float fov = G_DEGREE_TO_RADIAN(65);
 		float zn = 0.1f;
@@ -465,16 +533,16 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		{ "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
-	//CD3DX12_DESCRIPTOR_RANGE ranges[1] = {};
-	//ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0);
+	CD3DX12_DESCRIPTOR_RANGE ranges[1] = {};
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1000, 3, 0, 0);
 
-	CD3DX12_ROOT_PARAMETER rootParameters[5] = {};
+	CD3DX12_ROOT_PARAMETER rootParameters[6] = {};
 	rootParameters[0].InitAsConstants(2, 0, 0);			// num32bitConstants, register, space  (mesh_id)	b0
 	rootParameters[1].InitAsConstantBufferView(1, 0);	// register, space	(view,projection)				b1
 	rootParameters[2].InitAsShaderResourceView(0, 0);	// register, space	(OBJ_ATTRIBUTES)				t0
 	rootParameters[3].InitAsShaderResourceView(1, 0);	// register, space	(instance matrix data)			t1
 	rootParameters[4].InitAsShaderResourceView(2, 0);	// register, space	(light data)					t2
-	//rootParameters[4].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
+	rootParameters[5].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
 
 
 	// create root signature
@@ -514,11 +582,17 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 Renderer::~Renderer()
 {
 	// ComPtr will auto release so nothing to do here 
-	constantBufferScene->Unmap(0, nullptr);
+	if (constantBufferScene)
+	{
+		constantBufferScene->Unmap(0, nullptr);
+	}
 }
 
 VOID Renderer::Render()
 {
+	if (!vertexView.BufferLocation || !indexView.BufferLocation)
+		return;
+
 	// grab the context & render target
 	ID3D12GraphicsCommandList* cmd;
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv;
@@ -533,17 +607,29 @@ VOID Renderer::Render()
 	cmd->SetPipelineState(pipeline.Get());
 
 	// now we can draw
-	D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
-	D3D12_GPU_VIRTUAL_ADDRESS srvAttributesHandle = structuredBufferAttributesResource->GetGPUVirtualAddress() + 0U * (sizeof(H2B::ATTRIBUTES));
-	D3D12_GPU_VIRTUAL_ADDRESS srvInstanceHandle = structuredBufferInstanceResource->GetGPUVirtualAddress() + 0U * sizeof(GW::MATH::GMATRIXF);
-	D3D12_GPU_VIRTUAL_ADDRESS srvLightHandle = structuredBufferLightResource->GetGPUVirtualAddress() + 0U * sizeof(H2B::LIGHT);
 	cmd->IASetVertexBuffers(0, 1, &vertexView);
 	cmd->IASetIndexBuffer(&indexView);
 	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	cmd->SetGraphicsRootConstantBufferView(1, cbvHandle);
-	cmd->SetGraphicsRootShaderResourceView(2, srvAttributesHandle);
-	cmd->SetGraphicsRootShaderResourceView(3, srvInstanceHandle);
-	cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
+	if (constantBufferScene)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
+		cmd->SetGraphicsRootConstantBufferView(1, cbvHandle);
+	}
+	if (structuredBufferAttributesResource)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS srvAttributesHandle = structuredBufferAttributesResource->GetGPUVirtualAddress() + 0U * (sizeof(H2B::ATTRIBUTES));
+		cmd->SetGraphicsRootShaderResourceView(2, srvAttributesHandle);
+	}
+	if (structuredBufferInstanceResource)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS srvInstanceHandle = structuredBufferInstanceResource->GetGPUVirtualAddress() + 0U * sizeof(GW::MATH::GMATRIXF);
+		cmd->SetGraphicsRootShaderResourceView(3, srvInstanceHandle);
+	}
+	if (structuredBufferLightResource)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS srvLightHandle = structuredBufferLightResource->GetGPUVirtualAddress() + 0U * sizeof(H2B::LIGHT);
+		cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
+	}
 
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
@@ -571,6 +657,9 @@ VOID Renderer::Update(FLOAT deltaTime)
 		campos
 	};
 
-	memcpy(constantBufferSceneData, &scene, sizeof(SCENE));
-
+	if (constantBufferSceneData)
+	{
+		memcpy(constantBufferSceneData, &scene, sizeof(SCENE));
+	}
 }
+

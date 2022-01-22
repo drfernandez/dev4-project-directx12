@@ -96,10 +96,20 @@ namespace H2B
 	struct INSTANCED_MESH
 	{
 		std::string meshName;
-		unsigned int meshID = 0;
-		unsigned int numInstances = 0;
-		unsigned int vertexOffset = 0;
+		unsigned int meshID;
+		unsigned int numInstances;
+		unsigned int vertexOffset;
 		std::vector<GW::MATH::GMATRIXF> matrices;
 		std::vector<H2B::MESH2> subMeshes;
+
+		INSTANCED_MESH()
+		{
+			meshName = "";
+			meshID = 0;
+			numInstances = 0;
+			vertexOffset = 0;
+			matrices.clear();
+			subMeshes.clear();
+		}
 	};
 }

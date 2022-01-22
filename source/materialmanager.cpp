@@ -31,7 +31,7 @@ UINT MaterialManager::GetMaterialID(const H2B::MATERIAL2& mat)
 		// store the index
 		index = materials.size();
 		// push into the container
-		materials.push_back(mat);
+		materials.push_back(mat.attrib);
 		// insert into the map
 		materialMap[mat.name] = index;
 		// up the material count
@@ -47,13 +47,13 @@ UINT MaterialManager::GetMaterialID(const H2B::MATERIAL2& mat)
 	return index;
 }
 
-H2B::MATERIAL2 MaterialManager::GetMaterial(const UINT index)
+H2B::ATTRIBUTES MaterialManager::GetMaterial(const UINT index)
 {
 	// variable for the material
-	H2B::MATERIAL2 m = H2B::MATERIAL2();
+	H2B::ATTRIBUTES a = H2B::ATTRIBUTES();
 	// check for a valid index ? if yes get the material : if no return a default value
-	m = (index < materials.size()) ? materials[index] : m;
-	return m;
+	a = (index < materials.size()) ? materials[index] : a;
+	return a;
 }
 
 MaterialManager::MaterialManager()

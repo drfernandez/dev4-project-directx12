@@ -12,11 +12,11 @@ public:
 	VOID Initialize();
 	VOID Shutdown();
 	UINT GetMaterialID(const H2B::MATERIAL2& mat);
-	H2B::MATERIAL2 GetMaterial(const UINT index);
+	H2B::ATTRIBUTES GetMaterial(const UINT index);
 	VOID Clear();
 
 	UINT material_count;
-	std::vector<H2B::MATERIAL2> materials;
+	std::vector<H2B::ATTRIBUTES> materials;
 	std::map<std::string, UINT> materialMap;
 
 private:

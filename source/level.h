@@ -19,6 +19,7 @@ private:
 	void LoadMeshFromFile();
 	void LoadLightFromFile();
 	void LoadCameraFromFile();
+	BOOL IsUniqueMesh(std::map<std::string, H2B::INSTANCED_MESH>& container, const std::string& assetName);
 
 public:
 	std::string name;
@@ -30,7 +31,8 @@ public:
 	std::map<std::string, H2B::INSTANCED_MESH> uniqueMeshes;
 	std::map<std::string, H2B::INSTANCED_MESH> uniqueSkyboxes;
 	std::vector<H2B::LIGHT> uniqueLights;
-	MaterialManager* mm = nullptr;
+	std::vector<GW::MATH::GMATRIXF> instanceData;
+	MaterialManager* mm;
 
 	Level();
 	~Level();
