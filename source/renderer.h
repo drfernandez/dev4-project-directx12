@@ -10,6 +10,7 @@
 #include "level.h"
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }
+#define D3D12_COMPTR_SAFE_RELEASE(ptr) { if(ptr) { /*ptr->Release(); */ptr = nullptr; } }
 
 struct SCENE
 {
@@ -186,21 +187,16 @@ VOID Renderer::UpdateCamera(FLOAT deltaTime)
 VOID Renderer::ReleaseLevelResources()
 {
 	currentLevel.Clear();
-	if (currentLevel.mm)
-	{
-		currentLevel.mm->Clear();
-	}
 
 	vertexView = { 0 };
 	indexView = { 0 };
 
-
-	D3D12_SAFE_RELEASE(vertexBuffer);
-	D3D12_SAFE_RELEASE(indexBuffer);
-	D3D12_SAFE_RELEASE(constantBufferScene);
-	D3D12_SAFE_RELEASE(structuredBufferAttributesResource);
-	D3D12_SAFE_RELEASE(structuredBufferInstanceResource);
-	D3D12_SAFE_RELEASE(structuredBufferLightResource);
+	D3D12_COMPTR_SAFE_RELEASE(vertexBuffer);
+	D3D12_COMPTR_SAFE_RELEASE(indexBuffer);
+	D3D12_COMPTR_SAFE_RELEASE(constantBufferScene);
+	D3D12_COMPTR_SAFE_RELEASE(structuredBufferAttributesResource);
+	D3D12_COMPTR_SAFE_RELEASE(structuredBufferInstanceResource);
+	D3D12_COMPTR_SAFE_RELEASE(structuredBufferLightResource);
 	constantBufferSceneData = nullptr;
 	structuredBufferAttributesData = nullptr;
 	structuredBufferInstanceData = nullptr;
@@ -465,6 +461,7 @@ VOID Renderer::WaitForGpu()
 {
 	ID3D12CommandQueue* commandQueue;
 	ID3D12Fence*	fence;
+	ULONG ref = 0;
 
 	d3d.GetCommandQueue((void**)&commandQueue);
 	d3d.GetFence((void**)&fence);
@@ -477,8 +474,9 @@ VOID Renderer::WaitForGpu()
 
 	// Increment the fence value for the current frame.
 	fenceValues++;
-	commandQueue->Release();
-	fence->Release();
+	ref = commandQueue->Release();
+	ref = fence->Release();
+	int debug = 0;
 }
 
 Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d)
@@ -515,7 +513,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 			if (bReadIsGood && bBufferedInputKey1 && !dialogBoxOpen)
 			{
 				dialogBoxOpen = true;
-				std::string levelName = std::string("");
+				std::string levelName = std::string();
 				if (OpenFileDialogBox(uwh, levelName))
 				{
 					WaitForGpu();

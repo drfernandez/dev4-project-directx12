@@ -29,7 +29,7 @@ BOOL Level::LoadLevel(const std::string& filepath)
 	{
 		return FALSE;
 	}
-	name = GetFileName(filepath);
+	this->name = GetFileName(filepath);
 	while (!input.eof())
 	{
 		char buffer[256] = { 0 };
@@ -79,10 +79,7 @@ BOOL Level::LoadLevel(const std::string& filepath)
 
 void Level::Clear()
 {
-	if (input.is_open())
-	{
-		input.close();
-	}
+	if (input.is_open()) input.close();
 	name.clear();
 	camera = GW::MATH::GIdentityMatrixF;
 	vertex_count = 0;
@@ -93,10 +90,7 @@ void Level::Clear()
 	uniqueSkyboxes.clear();
 	uniqueLights.clear();
 	instanceData.clear();
-	if (mm)
-	{
-		mm->Clear();
-	}
+	if (mm)	mm->Clear();
 }
 
 BOOL Level::FileExists(std::string file)
