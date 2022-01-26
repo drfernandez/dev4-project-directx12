@@ -74,7 +74,7 @@ private:
 
 	VOID UpdateCamera(FLOAT deltaTime);
 	VOID ReleaseLevelResources();
-	BOOL LoadLevelDataFromFile(ID3D12Device* creator, const std::string& filename);
+	BOOL LoadLevelDataFromFile(const std::string& filename);
 	bool OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandle, std::string& fileName);
 	VOID WaitForGpu();
 
@@ -207,8 +207,11 @@ VOID Renderer::ReleaseLevelResources()
 	structuredBufferLightData = nullptr;
 }
 
-BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& filename)
+BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 {
+	ID3D12Device* creator = nullptr;
+	d3d.GetDevice((void**)&creator);
+
 	if (!currentLevel.LoadLevel(filename))
 	{
 		return FALSE;
@@ -417,6 +420,8 @@ BOOL Renderer::LoadLevelDataFromFile(ID3D12Device* creator, const std::string& f
 		}
 	}
 
+	creator->Release();
+
 	return TRUE;
 }
 
@@ -498,24 +503,26 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	+eventResponder.Create([=](const GW::GEvent& e)
 		{
-			if (GetFocus() == (HWND&)uwh)
+			bool IsFocusWindow = GetFocus() == (HWND&)uwh;
+			if (!IsFocusWindow)
 			{
-				GW::INPUT::GBufferedInput::Events q;
-				GW::INPUT::GBufferedInput::EVENT_DATA qd;
-				bool bReadIsGood = +e.Read(q, qd);
-				bool bBufferedInputKey1 = (q == GW::INPUT::GBufferedInput::Events::KEYRELEASED && qd.data == G_KEY_1);
-				if (bReadIsGood && bBufferedInputKey1 && !dialogBoxOpen)
+				return;
+			}
+			GW::INPUT::GBufferedInput::Events q;
+			GW::INPUT::GBufferedInput::EVENT_DATA qd;
+			bool bReadIsGood = +e.Read(q, qd);
+			bool bBufferedInputKey1 = (q == GW::INPUT::GBufferedInput::Events::KEYRELEASED && qd.data == G_KEY_1);
+			if (bReadIsGood && bBufferedInputKey1 && !dialogBoxOpen)
+			{
+				dialogBoxOpen = true;
+				std::string levelName = std::string("");
+				if (OpenFileDialogBox(uwh, levelName))
 				{
-					dialogBoxOpen = true;
-					std::string levelName = std::string("");
-					if (OpenFileDialogBox(uwh, levelName))
-					{
-						WaitForGpu();
-						ReleaseLevelResources();
-						LoadLevelDataFromFile(creator, levelName);
-					}
-					dialogBoxOpen = false;
+					WaitForGpu();
+					ReleaseLevelResources();
+					LoadLevelDataFromFile(levelName);
 				}
+				dialogBoxOpen = false;
 			}
 		});
 	+bufferedInput.Register(eventResponder);
@@ -595,6 +602,11 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	Microsoft::WRL::ComPtr<ID3DBlob> signature;
 	hr = D3D12SerializeRootSignature(&rootSignatureDesc,
 		D3D_ROOT_SIGNATURE_VERSION_1, &signature, &errors);
+	if(FAILED(hr))
+	{
+		std::cout << (char*)errors->GetBufferPointer() << std::endl;
+		abort();
+	}
 
 	creator->CreateRootSignature(0, signature->GetBufferPointer(),
 		signature->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
@@ -614,7 +626,12 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	psDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 	psDesc.SampleDesc.Count = 1;
-	creator->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipeline));
+	hr = creator->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipeline));
+	if(FAILED(hr))
+	{
+		std::cout << (char*)errors->GetBufferPointer() << std::endl;
+		abort();
+	}
 	// free temporary handle
 	creator->Release();
 }
@@ -688,10 +705,10 @@ VOID Renderer::Update(FLOAT deltaTime)
 {
 	GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE wndHandle;
 	win.GetWindowHandle(wndHandle);
+	BOOL IsFocusWindow = GetFocus() == (HWND&)wndHandle;
 
-	if (GetFocus() == (HWND&)wndHandle)
+	if (IsFocusWindow)
 	{
-		int d = 0;
 		UpdateCamera(deltaTime);
 	}
 
