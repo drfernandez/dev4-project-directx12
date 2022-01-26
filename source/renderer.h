@@ -10,7 +10,7 @@
 #include "level.h"
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }
-#define D3D12_COMPTR_SAFE_RELEASE(ptr) { if(ptr) { /*ptr->Release(); */ptr = nullptr; } }
+#define D3D12_COMPTR_SAFE_RELEASE(ptr) { if(ptr) { ptr = nullptr; } }
 
 struct SCENE
 {
@@ -197,6 +197,7 @@ VOID Renderer::ReleaseLevelResources()
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferAttributesResource);
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferInstanceResource);
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferLightResource);
+
 	constantBufferSceneData = nullptr;
 	structuredBufferAttributesData = nullptr;
 	structuredBufferInstanceData = nullptr;
@@ -225,7 +226,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		hr = creator->CreateCommittedResource( // using UPLOAD heap for simplicity
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), // DEFAULT recommend  
 			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
-			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vertexBuffer));
+			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(vertexBuffer.ReleaseAndGetAddressOf()));
 
 		UINT8* transferMemoryLocation = nullptr;
 		hr = vertexBuffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&transferMemoryLocation));
@@ -244,7 +245,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		hr = creator->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
 			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize),
-			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&indexBuffer));
+			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(indexBuffer.ReleaseAndGetAddressOf()));
 
 		UINT8* transferMemoryLocation = nullptr;
 		hr = indexBuffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&transferMemoryLocation));
@@ -279,7 +280,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			&resource_desc,
 			D3D12_RESOURCE_STATE_GENERIC_READ,
 			nullptr,
-			IID_PPV_ARGS(&constantBufferScene));
+			IID_PPV_ARGS(constantBufferScene.ReleaseAndGetAddressOf()));
 
 		cbvSceneHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 0, cbvDescriptorSize);
 
@@ -303,7 +304,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				&resource_desc,
 				D3D12_RESOURCE_STATE_GENERIC_READ,
 				nullptr,
-				IID_PPV_ARGS(&structuredBufferAttributesResource));
+				IID_PPV_ARGS(structuredBufferAttributesResource.ReleaseAndGetAddressOf()));
 
 			structuredBufferAttributeHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
 
@@ -333,7 +334,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				&resource_desc,
 				D3D12_RESOURCE_STATE_GENERIC_READ,
 				nullptr,
-				IID_PPV_ARGS(&structuredBufferInstanceResource));
+				IID_PPV_ARGS(structuredBufferInstanceResource.ReleaseAndGetAddressOf()));
 
 			structuredBufferInstanceHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 2, cbvDescriptorSize);
 
@@ -363,7 +364,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				&resource_desc,
 				D3D12_RESOURCE_STATE_GENERIC_READ,
 				nullptr,
-				IID_PPV_ARGS(&structuredBufferLightResource));
+				IID_PPV_ARGS(structuredBufferLightResource.ReleaseAndGetAddressOf()));
 
 			structuredBufferLightHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 3, cbvDescriptorSize);
 
@@ -380,6 +381,8 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Map all the necessary resources to a GPU address in order to copy data from the CPU
 		if (constantBufferScene)
 		{
 			hr = constantBufferScene->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&constantBufferSceneData));
@@ -414,6 +417,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				structuredBufferLightResource->Unmap(0, nullptr);
 			}
 		}
+		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 
 	creator->Release();
@@ -427,12 +431,12 @@ bool Renderer::OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandl
 	bool result = false;
 	OPENFILENAME ofn = { 0 };       // common dialog box structure
 	WCHAR szFile[260];       // buffer for file name 
-	//HWND hwnd;              // owner window
+	HWND hwnd = (HWND)windowHandle.window;              // owner window
 
 	// Initialize OPENFILENAME
 	ZeroMemory(&ofn, sizeof(ofn));
 	ofn.lStructSize = sizeof(ofn);
-	ofn.hwndOwner = (HWND)windowHandle.window;
+	ofn.hwndOwner = hwnd;
 	ofn.lpstrFile = szFile;
 	// Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
 	// use the contents of szFile to initialize itself.
@@ -445,8 +449,7 @@ bool Renderer::OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandl
 	ofn.lpstrInitialDir = NULL;
 	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
-	// Display the Open dialog box. 
-
+	// Display the Open dialog box.
 	if (GetOpenFileNameW(&ofn) == TRUE)
 	{
 		std::wstring ws(ofn.lpstrFile);
@@ -476,7 +479,6 @@ VOID Renderer::WaitForGpu()
 	fenceValues++;
 	ref = commandQueue->Release();
 	ref = fence->Release();
-	int debug = 0;
 }
 
 Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d)
