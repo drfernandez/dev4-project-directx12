@@ -8,9 +8,13 @@
 #include "d3dx12.h" // official helper file provided by microsoft
 //#include "FSLogo.h"
 #include "level.h"
+#include <DDSTextureLoader.h>
+#include <WICTextureLoader.h>
 
-#define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }
+
+#define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
 #define D3D12_COMPTR_SAFE_RELEASE(ptr) { if(ptr) { ptr = nullptr; } }
+#define MAX_TEXTURES 1000
 
 struct SCENE
 {
@@ -51,6 +55,7 @@ private:
 
 	UINT											cbvDescriptorSize;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>	cbvsrvuavHeap;
+	UINT											cbvsrvuabIndex;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>			constantBufferScene;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE					cbvSceneHandle;
@@ -206,8 +211,8 @@ VOID Renderer::ReleaseLevelResources()
 
 BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 {
-	ID3D12Device* creator = nullptr;
-	d3d.GetDevice((void**)&creator);
+	ID3D12Device* device = nullptr;
+	d3d.GetDevice((void**)&device);
 
 	if (!currentLevel.LoadLevel(filename))
 	{
@@ -223,7 +228,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// vertex buffer creation
 		UINT vertexBufferSize = sizeof(H2B::VERTEX) * currentLevel.vertex_count;
-		hr = creator->CreateCommittedResource( // using UPLOAD heap for simplicity
+		hr = device->CreateCommittedResource( // using UPLOAD heap for simplicity
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), // DEFAULT recommend  
 			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
 			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(vertexBuffer.ReleaseAndGetAddressOf()));
@@ -242,7 +247,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// index buffer creation
 		UINT indexBufferSize = sizeof(UINT) * currentLevel.index_count;
-		hr = creator->CreateCommittedResource(
+		hr = device->CreateCommittedResource(
 			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
 			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize),
 			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(indexBuffer.ReleaseAndGetAddressOf()));
@@ -261,12 +266,14 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// constant buffer heap creation
 		D3D12_DESCRIPTOR_HEAP_DESC cbvsrvuavHeapDesc = {};
-		cbvsrvuavHeapDesc.NumDescriptors = 4;		// X number of descriptors to create from cbv_srv_uav heap
+		cbvsrvuavHeapDesc.NumDescriptors = 4 + MAX_TEXTURES;		// X number of descriptors to create from cbv_srv_uav heap
 		cbvsrvuavHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		cbvsrvuavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		hr = creator->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(cbvsrvuavHeap.ReleaseAndGetAddressOf()));
+		hr = device->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(cbvsrvuavHeap.ReleaseAndGetAddressOf()));
 
-		cbvDescriptorSize = creator->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		
+
+		cbvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -274,7 +281,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
 		// commited resource for the constant buffer
-		hr = creator->CreateCommittedResource(
+		hr = device->CreateCommittedResource(
 			&prop,
 			D3D12_HEAP_FLAG_NONE,
 			&resource_desc,
@@ -282,13 +289,14 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			nullptr,
 			IID_PPV_ARGS(constantBufferScene.ReleaseAndGetAddressOf()));
 
-		cbvSceneHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 0, cbvDescriptorSize);
+		cbvSceneHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), cbvsrvuabIndex, cbvDescriptorSize);
+		cbvsrvuabIndex++;
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 		cbvDesc.BufferLocation = constantBufferScene->GetGPUVirtualAddress();
 		cbvDesc.SizeInBytes = constantBufferSize;    // CB size is required to be 256-byte aligned.
 		// create CBV
-		creator->CreateConstantBufferView(&cbvDesc, cbvSceneHandle);
+		device->CreateConstantBufferView(&cbvDesc, cbvSceneHandle);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -298,7 +306,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		{
 			// commited resource for the structured buffer
 			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(H2B::ATTRIBUTES) * numAttributes);
-			hr = creator->CreateCommittedResource(
+			hr = device->CreateCommittedResource(
 				&prop,
 				D3D12_HEAP_FLAG_NONE,
 				&resource_desc,
@@ -306,7 +314,8 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				nullptr,
 				IID_PPV_ARGS(structuredBufferAttributesResource.ReleaseAndGetAddressOf()));
 
-			structuredBufferAttributeHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
+			structuredBufferAttributeHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), cbvsrvuabIndex, cbvDescriptorSize);
+			cbvsrvuabIndex++;
 
 			// srv description
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -317,7 +326,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			srvDesc.Buffer.NumElements = numAttributes;
 			srvDesc.Buffer.StructureByteStride = sizeof(H2B::ATTRIBUTES);
 			// create SRV
-			creator->CreateShaderResourceView(structuredBufferAttributesResource.Get(), &srvDesc, structuredBufferAttributeHandle);
+			device->CreateShaderResourceView(structuredBufferAttributesResource.Get(), &srvDesc, structuredBufferAttributeHandle);
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -328,7 +337,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		{
 			// commited resource for the structured buffer
 			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(GW::MATH::GMATRIXF) * numInstances);
-			hr = creator->CreateCommittedResource(
+			hr = device->CreateCommittedResource(
 				&prop,
 				D3D12_HEAP_FLAG_NONE,
 				&resource_desc,
@@ -336,7 +345,8 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				nullptr,
 				IID_PPV_ARGS(structuredBufferInstanceResource.ReleaseAndGetAddressOf()));
 
-			structuredBufferInstanceHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 2, cbvDescriptorSize);
+			structuredBufferInstanceHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), cbvsrvuabIndex, cbvDescriptorSize);
+			cbvsrvuabIndex++;
 
 			// srv description
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -347,7 +357,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			srvDesc.Buffer.NumElements = numInstances;
 			srvDesc.Buffer.StructureByteStride = sizeof(GW::MATH::GMATRIXF);
 			// create SRV
-			creator->CreateShaderResourceView(structuredBufferInstanceResource.Get(), &srvDesc, structuredBufferInstanceHandle);
+			device->CreateShaderResourceView(structuredBufferInstanceResource.Get(), &srvDesc, structuredBufferInstanceHandle);
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -358,7 +368,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		{
 			// commited resource for the structured buffer
 			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(H2B::LIGHT) * numLights);
-			hr = creator->CreateCommittedResource(
+			hr = device->CreateCommittedResource(
 				&prop,
 				D3D12_HEAP_FLAG_NONE,
 				&resource_desc,
@@ -366,7 +376,8 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				nullptr,
 				IID_PPV_ARGS(structuredBufferLightResource.ReleaseAndGetAddressOf()));
 
-			structuredBufferLightHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 3, cbvDescriptorSize);
+			structuredBufferLightHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), cbvsrvuabIndex, cbvDescriptorSize);
+			cbvsrvuabIndex++;
 
 			// srv description
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -377,9 +388,44 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			srvDesc.Buffer.NumElements = numLights;
 			srvDesc.Buffer.StructureByteStride = sizeof(H2B::LIGHT);
 			// create SRV
-			creator->CreateShaderResourceView(structuredBufferLightResource.Get(), &srvDesc, structuredBufferLightHandle);
+			device->CreateShaderResourceView(structuredBufferLightResource.Get(), &srvDesc, structuredBufferLightHandle);
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
+		
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Texture Loading 
+		{
+			std::wstring filepathDDS = L"../textures/uvmapping.dds";
+			//std::wstring filepathWIC = L"../textures/uvmapping.jpg";
+
+			std::unique_ptr<uint8_t[]> ddsData;
+			std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+			Microsoft::WRL::ComPtr<ID3D12Resource> textureResourceDDS;
+			DirectX::DDS_ALPHA_MODE alphaMode;
+			bool isCubeMap = false;
+			hr = DirectX::LoadDDSTextureFromFile(device, filepathDDS.c_str(), textureResourceDDS.ReleaseAndGetAddressOf(),
+				ddsData, subresources, 0Ui64, &alphaMode, &isCubeMap);
+
+			D3D12_RESOURCE_DESC resourceDesc = textureResourceDDS->GetDesc();
+			D3D12_SHADER_RESOURCE_VIEW_DESC ddsSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC();
+			ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			ddsSrvDesc.Format = resourceDesc.Format;
+			ddsSrvDesc.ViewDimension = (isCubeMap) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+			ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
+
+			CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), cbvsrvuabIndex, cbvDescriptorSize);
+			cbvsrvuabIndex++;		
+
+			device->CreateShaderResourceView(textureResourceDDS.Get(), &ddsSrvDesc, descHandle);
+
+			//std::unique_ptr<uint8_t[]> wicData;
+			//D3D12_SUBRESOURCE_DATA subresource;
+			//Microsoft::WRL::ComPtr<ID3D12Resource> textureResourceWIC;
+			//hr = DirectX::LoadWICTextureFromFile(device, filepathWIC.c_str(), textureResourceWIC.ReleaseAndGetAddressOf(), wicData, subresource);
+		}
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Map all the necessary resources to a GPU address in order to copy data from the CPU
@@ -420,7 +466,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 
-	creator->Release();
+	device->Release();
 
 	return TRUE;
 }
@@ -485,6 +531,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 {
 	dialogBoxOpen = false;
 	fenceValues = 0;
+	cbvsrvuabIndex = 1;
 
 	win = _win;
 	d3d = _d3d;
@@ -581,7 +628,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	};
 
 	CD3DX12_DESCRIPTOR_RANGE ranges[1] = {};
-	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3000, 3, 0);
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, MAX_TEXTURES, 3, 0);
 
 	CD3DX12_ROOT_PARAMETER rootParameters[6] = {};
 	rootParameters[0].InitAsConstants(2, 0, 0);			// num32bitConstants, register, space  (mesh_id)	b0
@@ -591,12 +638,23 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	rootParameters[4].InitAsShaderResourceView(2, 0);	// register, space	(light data)					t2
 	rootParameters[5].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
 
+	// static samplers
+	CD3DX12_STATIC_SAMPLER_DESC sampler(
+		0, 
+		D3D12_FILTER_ANISOTROPIC,
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+		0.0f, 16U, 
+		D3D12_COMPARISON_FUNC_LESS_EQUAL, 
+		D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+		0.0f, 3.402823466e+38F, 
+		D3D12_SHADER_VISIBILITY_PIXEL, 
+		0);
 
 	// create root signature
 	CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
 	rootSignatureDesc.Init(
 		ARRAYSIZE(rootParameters), rootParameters, // number of params, root parameters
-		0, nullptr, // number of samplers, static samplers
+		1, &sampler, // number of samplers, static samplers
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	Microsoft::WRL::ComPtr<ID3DBlob> signature;
@@ -629,7 +687,6 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	hr = creator->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipeline));
 	if(FAILED(hr))
 	{
-		std::cout << (char*)errors->GetBufferPointer() << std::endl;
 		abort();
 	}
 	// free temporary handle
@@ -663,10 +720,16 @@ VOID Renderer::Render()
 	cmd->SetGraphicsRootSignature(rootSignature.Get());
 	cmd->SetPipelineState(pipeline.Get());
 
+	//Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ppHeaps[] = { cbvsrvuavHeap.Get() };
+	//cmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps->GetAddressOf());
+
 	// now we can draw
 	cmd->IASetVertexBuffers(0, 1, &vertexView);
 	cmd->IASetIndexBuffer(&indexView);
 	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	//CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5, cbvDescriptorSize);
+	//cmd->SetGraphicsRootDescriptorTable(5, srvHandle);
+
 	if (constantBufferScene)
 	{
 		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));

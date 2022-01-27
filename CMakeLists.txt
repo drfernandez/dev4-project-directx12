@@ -62,6 +62,13 @@ if(WIN32)
 		#VS_SHADER_VARIABLE_NAME "%(Filename)"
 		#VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:true>
 	)
+	# add support for dds texture loading
+	include_directories(${CMAKE_SOURCE_DIR}/directxtk12/include)
+	# Find the libraries
+	find_library(DDS_LIB_D NAMES DirectXTK12 PATHS ${CMAKE_SOURCE_DIR}/directxtk12/lib/x64/Debug)
+	find_library(DDS_LIB_R NAMES DirectXTK12 PATHS ${CMAKE_SOURCE_DIR}/directxtk12/lib/x64/Release)
+	# link the ktx sdk include and lib files
+	target_link_libraries(Project_DX12 debug ${DDS_LIB_D} optimized ${DDS_LIB_R})
 	
 	#set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${VERTEX_SHADERS})
