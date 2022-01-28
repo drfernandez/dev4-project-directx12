@@ -30,7 +30,7 @@ SamplerState filter : register(s0);
 
 float4 main(PS_IN input) : SV_TARGET
 {
-    //return diffuse[0].Sample(filter, input.uv);
+    return diffuse[0].Sample(filter, input.uv);
     ATTRIBUTES material = AttributesData[material_id];
     
     SURFACE surface = (SURFACE) 0;

@@ -418,6 +418,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			cbvsrvuabIndex++;		
 
 			device->CreateShaderResourceView(textureResourceDDS.Get(), &ddsSrvDesc, descHandle);
+			
 
 			//std::unique_ptr<uint8_t[]> wicData;
 			//D3D12_SUBRESOURCE_DATA subresource;
@@ -636,7 +637,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	rootParameters[2].InitAsShaderResourceView(0, 0);	// register, space	(OBJ_ATTRIBUTES)				t0
 	rootParameters[3].InitAsShaderResourceView(1, 0);	// register, space	(instance matrix data)			t1
 	rootParameters[4].InitAsShaderResourceView(2, 0);	// register, space	(light data)					t2
-	rootParameters[5].InitAsDescriptorTable(ARRAYSIZE(ranges), ranges);
+	rootParameters[5].InitAsDescriptorTable(1, &ranges[0]);
 
 	// static samplers
 	CD3DX12_STATIC_SAMPLER_DESC sampler(
@@ -720,15 +721,15 @@ VOID Renderer::Render()
 	cmd->SetGraphicsRootSignature(rootSignature.Get());
 	cmd->SetPipelineState(pipeline.Get());
 
-	//Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ppHeaps[] = { cbvsrvuavHeap.Get() };
-	//cmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps->GetAddressOf());
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ppHeaps[] = { cbvsrvuavHeap.Get() };
+	cmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps->GetAddressOf());
 
 	// now we can draw
 	cmd->IASetVertexBuffers(0, 1, &vertexView);
 	cmd->IASetIndexBuffer(&indexView);
 	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	//CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5, cbvDescriptorSize);
-	//cmd->SetGraphicsRootDescriptorTable(5, srvHandle);
+	CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 0, cbvDescriptorSize);
+	cmd->SetGraphicsRootDescriptorTable(5, srvHandle);
 
 	if (constantBufferScene)
 	{
