@@ -57,6 +57,7 @@ if(WIN32)
 		VS_SHADER_TYPE Pixel 
 		VS_SHADER_MODEL 5.1 
 		VS_SHADER_ENTRYPOINT main
+		VS_SHADER_FLAGS /enable_unbounded_descriptor_tables
 		#VS_TOOL_OVERRIDE "None"
 		#VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
 		#VS_SHADER_VARIABLE_NAME "%(Filename)"
