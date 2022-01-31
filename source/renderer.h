@@ -87,6 +87,8 @@ private:
 	BOOL LoadLevelDataFromFile(const std::string& filename);
 	bool OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandle, std::string& fileName);
 	VOID WaitForGpu();
+	HRESULT LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& cmd, const std::wstring filepath, 
+		Microsoft::WRL::ComPtr<ID3D12Resource>& resource, Microsoft::WRL::ComPtr<ID3D12Resource>& upload, bool* IsCubeMap);
 
 public:
 	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d);
@@ -279,15 +281,12 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		cbvsrvuavHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		cbvsrvuavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		hr = device->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(cbvsrvuavHeap.ReleaseAndGetAddressOf()));
-
-		
-
 		cbvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		CD3DX12_RESOURCE_DESC resource_desc;
+		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC();
 		{
 			UINT constantBufferSize = CalculateConstantBufferByteSize(sizeof(SCENE));
 			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
@@ -408,51 +407,19 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			allocator->Reset();
 			cmd->Reset(allocator, nullptr);
 
+			Microsoft::WRL::ComPtr<ID3D12Device> d(device);
+			Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
 
 			bool isCubeMap = false;
-
 			std::wstring filepathDDS = L"../textures/uvmapping.dds";
-			std::unique_ptr<uint8_t[]> ddsData;
-			std::vector<D3D12_SUBRESOURCE_DATA> subresources;
-			DirectX::DDS_ALPHA_MODE alphaMode;
-			hr = DirectX::LoadDDSTextureFromFile(device, filepathDDS.c_str(), textureResourceDDS.ReleaseAndGetAddressOf(),
-				ddsData, subresources, 0Ui64, &alphaMode, &isCubeMap);
+			hr = LoadTexture(d, c, filepathDDS, textureResourceDDS, textureResourceUpload, &isCubeMap);
 
 			D3D12_RESOURCE_DESC resourceDesc = textureResourceDDS->GetDesc();
 			D3D12_SHADER_RESOURCE_VIEW_DESC ddsSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC();
-			ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;			
+			ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 			ddsSrvDesc.Format = resourceDesc.Format;
 			ddsSrvDesc.ViewDimension = (isCubeMap) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
 			ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
-
-			CD3DX12_HEAP_PROPERTIES upload_prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-			UINT64 uploadSize = GetRequiredIntermediateSize(textureResourceDDS.Get(), 0, resourceDesc.MipLevels * resourceDesc.DepthOrArraySize);
-			CD3DX12_RESOURCE_DESC upload_resource = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
-
-			// Cannot do this... Resource wasn't created as an upload heap
-			//UINT8* texturePtr = nullptr;
-			//hr = textureResourceDDS->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&texturePtr));
-			//memcpy(texturePtr, subresources.data(), uploadSize);
-			//textureResourceDDS->Unmap(0, nullptr);			
-			
-			// create a heap for uploading
-			device->CreateCommittedResource(
-				&upload_prop,
-				D3D12_HEAP_FLAG_NONE,
-				&upload_resource,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr,
-				IID_PPV_ARGS(textureResourceUpload.ReleaseAndGetAddressOf()));
-
-			// update the resource using the upload heap
-			UpdateSubresources(cmd, 
-				textureResourceDDS.Get(), textureResourceUpload.Get(), 
-				0, 0, resourceDesc.MipLevels * resourceDesc.DepthOrArraySize,
-				subresources.data());
-
-			CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(textureResourceDDS.Get(),
-				D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			cmd->ResourceBarrier(1, &resource_barrier);
 
 			for (UINT i = 0; i < MAX_TEXTURES; i++)
 			{
@@ -460,12 +427,9 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				device->CreateShaderResourceView(textureResourceDDS.Get(), &ddsSrvDesc, descHandle);
 			}
 
-			cmd->DiscardResource(textureResourceUpload.Get(), nullptr);
-
 			cmd->Close();
 			Microsoft::WRL::ComPtr<ID3D12CommandList> lists[] = { cmd };
 			queue->ExecuteCommandLists(ARRAYSIZE(lists), lists->GetAddressOf());
-
 
 			//std::wstring filepathWIC = L"../textures/uvmapping.jpg";
 			//std::unique_ptr<uint8_t[]> wicData;
@@ -588,6 +552,54 @@ VOID Renderer::WaitForGpu()
 	fenceValues++;
 	ref = commandQueue->Release();
 	ref = fence->Release();
+}
+
+HRESULT Renderer::LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& cmd, 
+	const std::wstring filepath, Microsoft::WRL::ComPtr<ID3D12Resource>& resource, Microsoft::WRL::ComPtr<ID3D12Resource>& upload, bool* IsCubeMap)
+{
+	HRESULT hr = E_NOTIMPL;
+
+	std::unique_ptr<uint8_t[]> ddsData;
+	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+	DirectX::DDS_ALPHA_MODE alphaMode;
+	hr = DirectX::LoadDDSTextureFromFile(device.Get(), filepath.c_str(), resource.ReleaseAndGetAddressOf(),
+		ddsData, subresources, 0Ui64, &alphaMode, IsCubeMap);
+	if (FAILED(hr))
+	{
+		return hr;
+	}
+
+	D3D12_RESOURCE_DESC resourceDesc = resource->GetDesc();
+	CD3DX12_HEAP_PROPERTIES upload_prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	UINT64 uploadSize = GetRequiredIntermediateSize(resource.Get(), 0, resourceDesc.MipLevels * resourceDesc.DepthOrArraySize);
+	CD3DX12_RESOURCE_DESC upload_resource = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
+
+	// create a heap for uploading
+	hr = device->CreateCommittedResource(
+		&upload_prop,
+		D3D12_HEAP_FLAG_NONE,
+		&upload_resource,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(upload.ReleaseAndGetAddressOf()));
+	if (FAILED(hr))
+	{
+		return hr;
+	}
+
+	// update the resource using the upload heap
+	UINT64 n = UpdateSubresources(cmd.Get(),
+		resource.Get(), upload.Get(),
+		0, 0, resourceDesc.MipLevels * resourceDesc.DepthOrArraySize,
+		subresources.data());
+
+	CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(resource.Get(),
+		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	cmd->ResourceBarrier(1, &resource_barrier);
+
+	cmd->DiscardResource(upload.Get(), nullptr);
+
+	return S_OK;
 }
 
 Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d)
