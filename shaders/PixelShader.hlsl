@@ -25,12 +25,12 @@ StructuredBuffer<ATTRIBUTES> AttributesData : register(t0, space0);
 StructuredBuffer<matrix> InstanceData : register(t1, space0);
 StructuredBuffer<LIGHT> LightData : register(t2, space0);
 
-Texture2D<float4> diffuse[] : register(t3, space0);
+Texture2D diffuse[] : register(t3, space0);
 SamplerState filter : register(s0);
 
 float4 main(PS_IN input) : SV_TARGET
 {
-    //return diffuse[4].Sample(filter, input.uv);
+    return diffuse[0].Sample(filter, input.uv);
     ATTRIBUTES material = AttributesData[material_id];
     
     SURFACE surface = (SURFACE) 0;
