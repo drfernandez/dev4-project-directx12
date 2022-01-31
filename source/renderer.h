@@ -403,9 +403,10 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Texture Loading 
 		{
+			// Reset the command allocator and the graphics command list
+			// we plan on entering commands to upload information to the gpu
 			allocator->Reset();
 			cmd->Reset(allocator, nullptr);
-			// upload here
 
 
 			bool isCubeMap = false;
@@ -427,6 +428,14 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			CD3DX12_HEAP_PROPERTIES upload_prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 			UINT64 uploadSize = GetRequiredIntermediateSize(textureResourceDDS.Get(), 0, resourceDesc.MipLevels * resourceDesc.DepthOrArraySize);
 			CD3DX12_RESOURCE_DESC upload_resource = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
+
+			// Cannot do this... Resource wasn't created as an upload heap
+			//UINT8* texturePtr = nullptr;
+			//hr = textureResourceDDS->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&texturePtr));
+			//memcpy(texturePtr, subresources.data(), uploadSize);
+			//textureResourceDDS->Unmap(0, nullptr);			
+			
+			// create a heap for uploading
 			device->CreateCommittedResource(
 				&upload_prop,
 				D3D12_HEAP_FLAG_NONE,
@@ -435,15 +444,15 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				nullptr,
 				IID_PPV_ARGS(textureResourceUpload.ReleaseAndGetAddressOf()));
 
+			// update the resource using the upload heap
 			UpdateSubresources(cmd, 
 				textureResourceDDS.Get(), textureResourceUpload.Get(), 
-				0, 0, resourceDesc.MipLevels* resourceDesc.DepthOrArraySize,
+				0, 0, resourceDesc.MipLevels * resourceDesc.DepthOrArraySize,
 				subresources.data());
 
 			CD3DX12_RESOURCE_BARRIER resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(textureResourceDDS.Get(),
 				D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			cmd->ResourceBarrier(1, &resource_barrier);
-
 
 			for (UINT i = 0; i < MAX_TEXTURES; i++)
 			{
@@ -451,13 +460,13 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				device->CreateShaderResourceView(textureResourceDDS.Get(), &ddsSrvDesc, descHandle);
 			}
 
-			//cmd->DiscardResource(textureResourceUpload.Get(), nullptr);
-
-
+			cmd->DiscardResource(textureResourceUpload.Get(), nullptr);
 
 			cmd->Close();
 			Microsoft::WRL::ComPtr<ID3D12CommandList> lists[] = { cmd };
 			queue->ExecuteCommandLists(ARRAYSIZE(lists), lists->GetAddressOf());
+
+
 			//std::wstring filepathWIC = L"../textures/uvmapping.jpg";
 			//std::unique_ptr<uint8_t[]> wicData;
 			//D3D12_SUBRESOURCE_DATA subresource;
@@ -519,6 +528,9 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 	}
 
 	device->Release();
+	cmd->Release();
+	allocator->Release();
+	queue->Release();
 
 	return TRUE;
 }
@@ -679,10 +691,10 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	};
 
 	CD3DX12_DESCRIPTOR_RANGE1 ranges[1] = {};
-	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[6] = {};
-	rootParameters[0].InitAsConstants(2, 0, 0);			// num32bitConstants, register, space  (mesh_id)	b0
+	rootParameters[0].InitAsConstants(3, 0, 0);			// num32bitConstants, register, space  (mesh_id)	b0
 	rootParameters[1].InitAsConstantBufferView(1, 0);	// register, space	(view,projection)				b1
 	rootParameters[2].InitAsShaderResourceView(0, 0);	// register, space	(OBJ_ATTRIBUTES)				t0
 	rootParameters[3].InitAsShaderResourceView(1, 0);	// register, space	(instance matrix data)			t1
@@ -813,7 +825,7 @@ VOID Renderer::Render()
 	{
 		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 		{
-			UINT root32BitConstants[2] = { mesh.second.meshID, submesh.materialIndex };	// mesh_id, submesh_id, material_id?
+			UINT root32BitConstants[3] = { mesh.second.meshID, submesh.materialIndex, 0 };	// mesh_id, submesh_id, material_id?
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 		}

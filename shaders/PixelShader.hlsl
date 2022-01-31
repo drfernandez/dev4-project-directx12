@@ -12,6 +12,7 @@ cbuffer MESH_DATA : register(b0, space0)
 {
     uint mesh_id;
     uint material_id;
+    uint texture_id;
 };
 
 cbuffer SCENE : register(b1, space0)
@@ -25,12 +26,12 @@ StructuredBuffer<ATTRIBUTES> AttributesData : register(t0, space0);
 StructuredBuffer<matrix> InstanceData : register(t1, space0);
 StructuredBuffer<LIGHT> LightData : register(t2, space0);
 
-Texture2D diffuse[] : register(t3, space0);
-SamplerState filter : register(s0);
+Texture2D diffuse[] : register(t0, space1);
+SamplerState filter : register(s0, space0);
 
 float4 main(PS_IN input) : SV_TARGET
 {
-    float4 texture_color = diffuse[0].Sample(filter, input.uv);
+    float4 texture_color = diffuse[texture_id].Sample(filter, input.uv);
     ATTRIBUTES material = AttributesData[material_id];
     material.Kd = texture_color.rgb;
     material.d = texture_color.a;

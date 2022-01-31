@@ -19,6 +19,7 @@ cbuffer MESH_DATA : register(b0, space0)
 {
     uint mesh_id;
     uint material_id;
+    uint texture_id;
 };
 
 cbuffer SCENE : register(b1, space0)
@@ -38,15 +39,14 @@ VS_OUT main(VS_IN input, uint id : SV_InstanceID)
     float2 u = input.uvw.xy;
     float3 n = normalize(input.nrm);
     float3 wp = float3(0, 0, 0);
-    
     matrix w = InstanceData[mesh_id + id];
+    
     p = mul(w, p);
     wp = p.xyz;
     p = mul(view, p);
     p = mul(projection, p);
     n = mul(w, float4(n, 0.0f)).xyz;
     
-    VS_OUT output = { p, u, n, wp };
-    
+    VS_OUT output = { p, u, n, wp };    
     return output;
 }
