@@ -30,8 +30,10 @@ SamplerState filter : register(s0);
 
 float4 main(PS_IN input) : SV_TARGET
 {
-    return diffuse[0].Sample(filter, input.uv);
+    float4 texture_color = diffuse[0].Sample(filter, input.uv);
     ATTRIBUTES material = AttributesData[material_id];
+    material.Kd = texture_color.rgb;
+    material.d = texture_color.a;
     
     SURFACE surface = (SURFACE) 0;
     surface.position = input.wpos.xyz;
