@@ -28,56 +28,56 @@ class Renderer
 {
 private:
 	// proxy handles
-	GW::SYSTEM::GWindow								win;
-	GW::GRAPHICS::GDirectX12Surface					d3d;
+	GW::SYSTEM::GWindow											win;
+	GW::GRAPHICS::GDirectX12Surface								d3d;
 
-	UINT64											fenceValues;
+	UINT64														fenceValues;
 
-	GW::INPUT::GInput								kbmProxy;
-	GW::INPUT::GController							controllerProxy;
-	GW::INPUT::GBufferedInput						bufferedInput;
-	GW::CORE::GEventResponder						eventResponder;
-	bool											dialogBoxOpen;
+	GW::INPUT::GInput											kbmProxy;
+	GW::INPUT::GController										controllerProxy;
+	GW::INPUT::GBufferedInput									bufferedInput;
+	GW::CORE::GEventResponder									eventResponder;
+	bool														dialogBoxOpen;
 
-	GW::MATH::GMatrix								matrixProxy;
-	GW::MATH::GMATRIXF								identityMatrix;
-	GW::MATH::GMATRIXF								viewMatrix;
-	GW::MATH::GMATRIXF								projectionMatrix;
-	GW::MATH::GMATRIXF								worldCamera;
+	GW::MATH::GMatrix											matrixProxy;
+	GW::MATH::GMATRIXF											identityMatrix;
+	GW::MATH::GMATRIXF											viewMatrix;
+	GW::MATH::GMATRIXF											projectionMatrix;
+	GW::MATH::GMATRIXF											worldCamera;
 
-	D3D12_VERTEX_BUFFER_VIEW						vertexView;
-	D3D12_INDEX_BUFFER_VIEW							indexView;
-	Microsoft::WRL::ComPtr<ID3D12Resource>			vertexBuffer;
-	Microsoft::WRL::ComPtr<ID3D12Resource>			indexBuffer;
+	D3D12_VERTEX_BUFFER_VIEW									vertexView;
+	D3D12_INDEX_BUFFER_VIEW										indexView;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						vertexBuffer;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						indexBuffer;
 
-	Microsoft::WRL::ComPtr<ID3D12RootSignature>		rootSignature;
-	Microsoft::WRL::ComPtr<ID3D12PipelineState>		pipeline;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature>					rootSignature;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipeline;
 
-	UINT											cbvDescriptorSize;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>	cbvsrvuavHeap;
-	UINT											cbvsrvuabIndex;
+	UINT														cbvDescriptorSize;
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				cbvsrvuavHeap;
+	UINT														cbvsrvuabIndex;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource>			constantBufferScene;
-	CD3DX12_CPU_DESCRIPTOR_HANDLE					cbvSceneHandle;
-	SCENE*											constantBufferSceneData;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						constantBufferScene;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE								cbvSceneHandle;
+	SCENE*														constantBufferSceneData;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferAttributesResource;
-	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferAttributeHandle;
-	H2B::ATTRIBUTES*								structuredBufferAttributesData;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferAttributesResource;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferAttributeHandle;
+	H2B::ATTRIBUTES*											structuredBufferAttributesData;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferInstanceResource;
-	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferInstanceHandle;
-	GW::MATH::GMATRIXF*								structuredBufferInstanceData;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferInstanceResource;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferInstanceHandle;
+	GW::MATH::GMATRIXF*											structuredBufferInstanceData;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource>			structuredBufferLightResource;
-	CD3DX12_CPU_DESCRIPTOR_HANDLE					structuredBufferLightHandle;
-	H2B::LIGHT*										structuredBufferLightData;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferLightResource;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferLightHandle;
+	H2B::LIGHT*													structuredBufferLightData;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource>			textureResourceDDS;
-	Microsoft::WRL::ComPtr<ID3D12Resource>			textureResourceWIC;
-	Microsoft::WRL::ComPtr<ID3D12Resource>			textureResourceUpload;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDDS;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceWIC;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceUpload;
 
-	Level											currentLevel;
+	Level														currentLevel;
 
 	UINT CalculateConstantBufferByteSize(UINT byteSize);
 	std::string ShaderAsString(const CHAR* shaderFilePath);
@@ -206,7 +206,22 @@ VOID Renderer::ReleaseLevelResources()
 	D3D12_COMPTR_SAFE_RELEASE(constantBufferScene);
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferAttributesResource);
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferInstanceResource);
-	D3D12_COMPTR_SAFE_RELEASE(structuredBufferLightResource);
+	D3D12_COMPTR_SAFE_RELEASE(structuredBufferLightResource);	
+	for (auto& item : textureResourceDDS)
+	{
+		D3D12_COMPTR_SAFE_RELEASE(item);
+	}
+	textureResourceDDS.clear();
+	for (auto& item : textureResourceUpload)
+	{
+		D3D12_COMPTR_SAFE_RELEASE(item);
+	}
+	textureResourceUpload.clear();
+	for (auto& item : textureResourceWIC)
+	{
+		D3D12_COMPTR_SAFE_RELEASE(item);
+	}
+	textureResourceWIC.clear();
 
 	constantBufferSceneData = nullptr;
 	structuredBufferAttributesData = nullptr;
@@ -410,22 +425,49 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			Microsoft::WRL::ComPtr<ID3D12Device> d(device);
 			Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
 
-			bool isCubeMap = false;
-			std::wstring filepathDDS = L"../textures/uvmapping.dds";
-			hr = LoadTexture(d, c, filepathDDS, textureResourceDDS, textureResourceUpload, &isCubeMap);
+			textureResourceDDS.resize(10);
+			textureResourceUpload.resize(10);
+			textureResourceWIC.resize(10);
 
-			D3D12_RESOURCE_DESC resourceDesc = textureResourceDDS->GetDesc();
+			bool isCubeMap[10] = { false };
+			hr = LoadTexture(d, c, L"../textures/uvmapping.dds", textureResourceDDS[0], textureResourceUpload[0], &isCubeMap[0]);
+			hr = LoadTexture(d, c, L"../textures/George_Texture.dds", textureResourceDDS[1], textureResourceUpload[1], &isCubeMap[1]);
+			hr = LoadTexture(d, c, L"../textures/Leela_Texture.dds", textureResourceDDS[2], textureResourceUpload[2], &isCubeMap[2]);
+			hr = LoadTexture(d, c, L"../textures/Mike_Texture.dds", textureResourceDDS[3], textureResourceUpload[3], &isCubeMap[3]);
+
+			D3D12_RESOURCE_DESC resourceDesc = textureResourceDDS[0]->GetDesc();
 			D3D12_SHADER_RESOURCE_VIEW_DESC ddsSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC();
 			ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 			ddsSrvDesc.Format = resourceDesc.Format;
-			ddsSrvDesc.ViewDimension = (isCubeMap) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+			ddsSrvDesc.ViewDimension = (isCubeMap[0]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
 			ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
 
 			for (UINT i = 0; i < MAX_TEXTURES; i++)
 			{
 				CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 4 + i, cbvDescriptorSize);
-				device->CreateShaderResourceView(textureResourceDDS.Get(), &ddsSrvDesc, descHandle);
+				device->CreateShaderResourceView(textureResourceDDS[0].Get(), &ddsSrvDesc, descHandle);
 			}
+
+			resourceDesc = textureResourceDDS[1]->GetDesc();
+			ddsSrvDesc.Format = resourceDesc.Format;
+			ddsSrvDesc.ViewDimension = (isCubeMap[1]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+			ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
+			CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 4 + 1, cbvDescriptorSize);
+			device->CreateShaderResourceView(textureResourceDDS[1].Get(), &ddsSrvDesc, descHandle);
+
+			resourceDesc = textureResourceDDS[2]->GetDesc();
+			ddsSrvDesc.Format = resourceDesc.Format;
+			ddsSrvDesc.ViewDimension = (isCubeMap[2]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+			ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
+			descHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 4 + 2, cbvDescriptorSize);
+			device->CreateShaderResourceView(textureResourceDDS[2].Get(), &ddsSrvDesc, descHandle);
+
+			resourceDesc = textureResourceDDS[3]->GetDesc();
+			ddsSrvDesc.Format = resourceDesc.Format;
+			ddsSrvDesc.ViewDimension = (isCubeMap[3]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+			ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
+			descHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 4 + 3, cbvDescriptorSize);
+			device->CreateShaderResourceView(textureResourceDDS[3].Get(), &ddsSrvDesc, descHandle);
 
 			cmd->Close();
 			Microsoft::WRL::ComPtr<ID3D12CommandList> lists[] = { cmd };
@@ -832,12 +874,12 @@ VOID Renderer::Render()
 	CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
 	cmd->SetGraphicsRootDescriptorTable(5, srvHandle);
 
-
+	UINT counter = 0;
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
 		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 		{
-			UINT root32BitConstants[3] = { mesh.second.meshID, submesh.materialIndex, 0 };	// mesh_id, submesh_id, material_id?
+			UINT root32BitConstants[3] = { mesh.second.meshID, submesh.materialIndex, counter };	// mesh_id, submesh_id, material_id?
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 		}
