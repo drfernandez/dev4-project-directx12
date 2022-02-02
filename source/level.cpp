@@ -1,18 +1,12 @@
 #include "level.h"
 
-
 Level::Level()
 {
-	mm = MaterialManager::GetInstance();
-	mm->Initialize();
 	Clear();
-	in.Create();
 }
 
 Level::~Level()
 {
-	in.CloseFile();
-	mm->Shutdown();
 	Clear();
 }
 
@@ -20,10 +14,6 @@ BOOL Level::LoadLevel(const std::string& filepath)
 {
 	Clear();
 	std::string name = "../levels/" + GetFileName(filepath) + ".txt";
-	if (input.is_open())
-	{
-		input.close();
-	}
 	input.open(name.c_str(), std::ios_base::in);
 	if (!input.is_open())
 	{
@@ -32,7 +22,7 @@ BOOL Level::LoadLevel(const std::string& filepath)
 	this->name = GetFileName(filepath);
 	while (!input.eof())
 	{
-		char buffer[256] = { 0 };
+		CHAR buffer[256] = { 0 };
 		input.getline(buffer, 256);
 		if (strcmp(buffer, "MESH") == 0)
 		{
@@ -52,7 +42,7 @@ BOOL Level::LoadLevel(const std::string& filepath)
 	UINT meshID = 0;
 	for (auto& mesh : uniqueMeshes)
 	{
-		mesh.second.meshID = meshID;
+		mesh.second.meshIndex = meshID;
 		for (const auto& matrix : mesh.second.matrices)
 		{
 			meshID++;
@@ -60,7 +50,7 @@ BOOL Level::LoadLevel(const std::string& filepath)
 	}
 	for (auto& skybox : uniqueSkyboxes)
 	{
-		skybox.second.meshID = meshID;
+		skybox.second.meshIndex = meshID;
 		for (const auto& matrix : skybox.second.matrices)
 		{
 			meshID++;
@@ -90,7 +80,8 @@ void Level::Clear()
 	uniqueSkyboxes.clear();
 	uniqueLights.clear();
 	instanceData.clear();
-	if (mm)	mm->Clear();
+	materials.Clear();
+	textures.Clear();
 }
 
 BOOL Level::FileExists(std::string file)
@@ -134,7 +125,7 @@ std::string Level::GetFileName(std::string file)
 GW::MATH::GMATRIXF Level::ReadMatrixData()
 {
 	GW::MATH::GMATRIXF matrix = {};
-	char buffer[256] = {};
+	CHAR buffer[256] = {};
 	input.getline(buffer, 256, '('); // read up to the start of the matrix data
 
 	input.getline(buffer, 256, ','); // x
@@ -198,8 +189,11 @@ BOOL Level::LoadH2B(const std::string& h2bFilePath, H2B::INSTANCED_MESH& instanc
 		{
 			H2B::MESH2 m = H2B::MESH2(mesh);
 			H2B::MATERIAL2 mat = H2B::MATERIAL2(p.materials[m.materialIndex]);
+			BOOL IsTextured = !mat.map_Kd.empty();
 			m.drawInfo.indexOffset += index_count;
-			m.materialIndex = mm->GetMaterialID(mat);
+			m.materialIndex = materials.GetMaterialID(mat);
+			m.textureIndex = (IsTextured) ? textures.GetTextureID(mat) : 0;
+			m.hasColorTexture = IsTextured;
 			instancedMesh.subMeshes.push_back(m);
 		}
 

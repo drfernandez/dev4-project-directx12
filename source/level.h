@@ -5,12 +5,12 @@
 #include <vector>
 #include <fstream>
 #include "materialmanager.h"
+#include "texturemanager.h"
 
 class Level
 {
 private:
 	std::ifstream input;
-	GW::SYSTEM::GFile in;
 
 	BOOL FileExists(std::string file);
 	std::string GetFileName(std::string file);
@@ -32,7 +32,8 @@ public:
 	std::map<std::string, H2B::INSTANCED_MESH> uniqueSkyboxes;
 	std::vector<H2B::LIGHT> uniqueLights;
 	std::vector<GW::MATH::GMATRIXF> instanceData;
-	MaterialManager* mm;
+	MaterialManager materials;
+	TextureManager textures;
 
 	Level();
 	~Level();

@@ -12,6 +12,7 @@ struct MESH_DATA
 {
     uint mesh_id;
     uint material_id;
+    uint has_texture;
     uint texture_id;
 };
 
@@ -28,19 +29,21 @@ StructuredBuffer<ATTRIBUTES> AttributesData : register(t0, space0);
 StructuredBuffer<matrix> InstanceData : register(t1, space0);
 StructuredBuffer<LIGHT> LightData : register(t2, space0);
 
-Texture2D diffuse[] : register(t0, space1);
+Texture2D color_texture[] : register(t0, space1);
 SamplerState filter : register(s0, space0);
 
 float4 main(PS_IN input) : SV_TARGET
 {
-    float4 texture_color = diffuse[MeshData.texture_id].Sample(filter, input.uv);
     ATTRIBUTES material = AttributesData[MeshData.material_id];
-    material.Kd = texture_color.rgb;
-    material.d = texture_color.a;
+    float4 texture_color = color_texture[MeshData.texture_id].Sample(filter, input.uv);
+
+    if (MeshData.has_texture)
+    {
+        material.Kd = texture_color.rgb;
+        material.d = texture_color.a;
+    }
     
-    SURFACE surface = (SURFACE) 0;
-    surface.position = input.wpos.xyz;
-    surface.normal = normalize(input.nrm);
+    SURFACE surface = { input.wpos.xyz, normalize(input.nrm) };
     
     float4 luminance = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 specular = float4(0.0f, 0.0f, 0.0f, 0.0f);

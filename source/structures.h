@@ -34,6 +34,7 @@ namespace H2B
 		BATCH drawInfo;
 		unsigned int materialIndex;
 		unsigned int hasColorTexture;
+		unsigned int textureIndex;
 
 		MESH2()
 		{
@@ -41,6 +42,7 @@ namespace H2B
 			drawInfo = { };
 			materialIndex = 0;
 			hasColorTexture = 0;
+			textureIndex = 0;
 		}
 		MESH2(const MESH& m)
 		{
@@ -48,6 +50,7 @@ namespace H2B
 			drawInfo = m.drawInfo;
 			materialIndex = m.materialIndex;
 			hasColorTexture = 0;
+			textureIndex = 0;
 		}
 	};
 	struct MATERIAL2
@@ -96,7 +99,7 @@ namespace H2B
 	struct INSTANCED_MESH
 	{
 		std::string meshName;
-		unsigned int meshID;
+		unsigned int meshIndex;
 		unsigned int numInstances;
 		unsigned int vertexOffset;
 		std::vector<GW::MATH::GMATRIXF> matrices;
@@ -105,7 +108,7 @@ namespace H2B
 		INSTANCED_MESH()
 		{
 			meshName = "";
-			meshID = 0;
+			meshIndex = 0;
 			numInstances = 0;
 			vertexOffset = 0;
 			matrices.clear();
