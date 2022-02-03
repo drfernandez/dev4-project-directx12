@@ -180,6 +180,7 @@ VOID Renderer::UpdateCamera(FLOAT deltaTime)
 		GW::MATH::GMATRIXF y_rotation = GW::MATH::GIdentityMatrixF;
 		matrixProxy.RotateYLocalF(y_rotation, total_yaw, y_rotation);
 		GW::MATH::GVECTORF position = worldCamera.row4;
+		worldCamera.row4 = { 0.0f, 0.0f, 0.0f, 1.0f };
 		matrixProxy.MultiplyMatrixF(worldCamera, y_rotation, worldCamera);
 		worldCamera.row4 = position;
 	}
