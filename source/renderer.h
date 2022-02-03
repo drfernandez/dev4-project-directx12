@@ -84,9 +84,9 @@ private:
 	BOOL LoadLevelDataFromFile(const std::string& filename);
 	bool OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandle, std::string& fileName);
 	VOID WaitForGpu();
-	HRESULT LoadTexture(const std::wstring filepath,
+	HRESULT LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& cmd,
 		Microsoft::WRL::ComPtr<ID3D12Resource>& resource, Microsoft::WRL::ComPtr<ID3D12Resource>& upload,
-		bool& IsCubeMap);
+		const std::wstring filepath, bool& IsCubeMap);
 
 public:
 	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d);
@@ -418,13 +418,16 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			textureResourceUpload.resize(numTextures);
 			bool* IsCubeMap = new bool[numTextures];
 
+			Microsoft::WRL::ComPtr<ID3D12Device> d(device);
+			Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
+
 			std::vector<std::string> names = currentLevel.textures.GetTextures();
 			for (UINT i = 0; i < numTextures - 1; i++)
 			{
 				std::string current_name = "../textures/" + names[i].substr(0, names[i].size() - 3) + "dds";
 				std::wstring wide_string(current_name.begin(), current_name.end());
 
-				hr = LoadTexture(wide_string, textureResourceDDS[i], textureResourceUpload[i], IsCubeMap[i]);
+				hr = LoadTexture(d, c, textureResourceDDS[i], textureResourceUpload[i], wide_string, IsCubeMap[i]);
 				if (SUCCEEDED(hr))
 				{
 					D3D12_RESOURCE_DESC resourceDesc = textureResourceDDS[i]->GetDesc();
@@ -441,7 +444,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			}
 
 			UINT lastEntry = numTextures - 1;
-			hr = LoadTexture(L"../textures/uvmapping.dds", textureResourceDDS[lastEntry], textureResourceUpload[lastEntry], IsCubeMap[lastEntry]);
+			hr = LoadTexture(d, c, textureResourceDDS[lastEntry], textureResourceUpload[lastEntry], L"../textures/uvmapping.dds", IsCubeMap[lastEntry]);
 			if (SUCCEEDED(hr))
 			{
 				D3D12_RESOURCE_DESC resourceDesc = textureResourceDDS[lastEntry]->GetDesc();
@@ -574,21 +577,16 @@ VOID Renderer::WaitForGpu()
 	ref = fence->Release();
 }
 
-HRESULT Renderer::LoadTexture(const std::wstring filepath, 
-	Microsoft::WRL::ComPtr<ID3D12Resource>& resource, Microsoft::WRL::ComPtr<ID3D12Resource>& upload, 
-	bool& IsCubeMap)
+HRESULT Renderer::LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& cmd,
+	Microsoft::WRL::ComPtr<ID3D12Resource>& resource, Microsoft::WRL::ComPtr<ID3D12Resource>& upload,
+	const std::wstring filepath, bool& IsCubeMap)
 {
-	ID3D12Device* device = nullptr;
-	ID3D12GraphicsCommandList* cmd = nullptr;
-	d3d.GetDevice((void**)&device);
-	d3d.GetCommandList((void**)&cmd);
-
 	HRESULT hr = E_NOTIMPL;
 
 	std::unique_ptr<uint8_t[]> ddsData;
 	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
 	DirectX::DDS_ALPHA_MODE alphaMode;
-	hr = DirectX::LoadDDSTextureFromFile(device, filepath.c_str(), resource.ReleaseAndGetAddressOf(),
+	hr = DirectX::LoadDDSTextureFromFile(device.Get(), filepath.c_str(), resource.ReleaseAndGetAddressOf(),
 		ddsData, subresources, 0Ui64, &alphaMode, &IsCubeMap);
 	if (FAILED(hr))
 	{
@@ -614,7 +612,7 @@ HRESULT Renderer::LoadTexture(const std::wstring filepath,
 	}
 
 	// update the resource using the upload heap
-	UINT64 n = UpdateSubresources(cmd,
+	UINT64 n = UpdateSubresources(cmd.Get(),
 		resource.Get(), upload.Get(),
 		0, 0, resourceDesc.MipLevels * resourceDesc.DepthOrArraySize,
 		subresources.data());
@@ -624,9 +622,6 @@ HRESULT Renderer::LoadTexture(const std::wstring filepath,
 	cmd->ResourceBarrier(1, &resource_barrier);
 
 	cmd->DiscardResource(upload.Get(), nullptr);
-
-	cmd->Release();
-	device->Release();
 
 	return S_OK;
 }
