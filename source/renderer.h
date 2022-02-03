@@ -6,10 +6,8 @@
 #include <d3dcompiler.h>
 #pragma comment(lib, "d3dcompiler.lib")
 #include "d3dx12.h" // official helper file provided by microsoft
-//#include "FSLogo.h"
 #include "level.h"
 #include <DDSTextureLoader.h>
-#include <WICTextureLoader.h>
 
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
@@ -74,7 +72,6 @@ private:
 	H2B::LIGHT*													structuredBufferLightData;
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDDS;
-	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceWIC;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceUpload;
 
 	Level														currentLevel;
@@ -98,7 +95,6 @@ public:
 	VOID Update(FLOAT deltaTime);
 
 };
-
 
 UINT Renderer::CalculateConstantBufferByteSize(UINT byteSize)
 {
@@ -206,21 +202,14 @@ VOID Renderer::ReleaseLevelResources()
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferAttributesResource);
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferInstanceResource);
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferLightResource);	
-	for (auto& item : textureResourceDDS)
+	UINT resourceSize = textureResourceDDS.size();
+	for (UINT i = 0; i < resourceSize; i++)
 	{
-		D3D12_COMPTR_SAFE_RELEASE(item);
-	}
-	for (auto& item : textureResourceUpload)
-	{
-		D3D12_COMPTR_SAFE_RELEASE(item);
-	}
-	for (auto& item : textureResourceWIC)
-	{
-		D3D12_COMPTR_SAFE_RELEASE(item);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceDDS[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceUpload[i]);
 	}
 	textureResourceDDS.clear();
 	textureResourceUpload.clear();
-	textureResourceWIC.clear();
 
 	constantBufferSceneData = nullptr;
 	structuredBufferAttributesData = nullptr;
@@ -593,6 +582,7 @@ HRESULT Renderer::LoadTexture(const std::wstring filepath,
 	ID3D12GraphicsCommandList* cmd = nullptr;
 	d3d.GetDevice((void**)&device);
 	d3d.GetCommandList((void**)&cmd);
+
 	HRESULT hr = E_NOTIMPL;
 
 	std::unique_ptr<uint8_t[]> ddsData;
@@ -649,8 +639,8 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	win = _win;
 	d3d = _d3d;
-	ID3D12Device* creator;
-	d3d.GetDevice((void**)&creator);
+	ID3D12Device* device;
+	d3d.GetDevice((void**)&device);
 
 	matrixProxy.Create();
 	kbmProxy.Create(win);
@@ -776,7 +766,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		abort();
 	}
 
-	creator->CreateRootSignature(0, signature->GetBufferPointer(),
+	device->CreateRootSignature(0, signature->GetBufferPointer(),
 		signature->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
 
 	// create pipeline state
@@ -794,13 +784,13 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	psDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 	psDesc.SampleDesc.Count = 1;
-	hr = creator->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipeline));
+	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipeline));
 	if(FAILED(hr))
 	{
 		abort();
 	}
 	// free temporary handle
-	creator->Release();
+	device->Release();
 }
 
 Renderer::~Renderer()
@@ -810,6 +800,20 @@ Renderer::~Renderer()
 	{
 		constantBufferScene->Unmap(0, nullptr);
 	}
+
+	ReleaseLevelResources();
+
+	//ID3D12Device* device = nullptr;
+	//d3d.GetDevice((void**)&device);
+	//Microsoft::WRL::ComPtr<ID3D12DebugDevice> debug = nullptr;
+	//if (device)
+	//{
+	//	if (SUCCEEDED(device->QueryInterface(debug.ReleaseAndGetAddressOf())))
+	//	{
+	//		debug->ReportLiveDeviceObjects(D3D12_RLDO_FLAGS::D3D12_RLDO_IGNORE_INTERNAL);
+	//	}
+	//	device->Release();
+	//}
 }
 
 VOID Renderer::Render()
