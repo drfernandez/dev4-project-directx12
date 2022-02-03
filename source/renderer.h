@@ -470,7 +470,6 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			cmd->Close();
 			Microsoft::WRL::ComPtr<ID3D12CommandList> lists[] = { cmd };
 			queue->ExecuteCommandLists(ARRAYSIZE(lists), lists->GetAddressOf());
-
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		

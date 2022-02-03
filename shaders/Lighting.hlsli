@@ -40,7 +40,7 @@ float4 CalculatePointLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
     float lightRatio = saturate(dot(normalize(toLight), surface.normal));
     float attenuation = 1.0f - saturate(length(toLight) / light.attributes.z);
     float intensity = light.attributes.w;
-    float4 result = float4(light.color * lightRatio * attenuation * intensity);
+    float4 result = float4(light.color * lightRatio * pow(attenuation, 2.0f) * intensity);
     return result;
 }
 
@@ -55,7 +55,7 @@ float4 CalculateSpotLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
     float lightRatio = saturate(dot(toLight, surface.normal.xyz));
     float attenuation = 1.0f - saturate(toLightDistance / light.attributes.z);
     attenuation *= (1.0f - saturate((innerConeAngle - spotRatio) / (innerConeAngle - outerConeAngle)));
-    float4 result = light.color * lightRatio * attenuation * intensity;
+    float4 result = light.color * lightRatio * pow(attenuation, 2.0f) * intensity;
     return result;
 }
 
@@ -89,7 +89,7 @@ float4 CalculateSpecular(ATTRIBUTES mat, LIGHT light, SURFACE surface, float3 ca
     float inLight = dot(toLight, surface.normal.xyz);
     float3 reflec = normalize(reflect(-toLight, surface.normal));
     float specIntensity = pow(saturate(dot(toCam, reflec)), specPower);
-    float4 spec = float4(light.color.xyz * mat.Ks * specIntensity * attenuation * inLight, 0.0f);
+    float4 spec = float4(light.color.xyz * mat.Ks * specIntensity * pow(attenuation, 2.0f) * inLight, 0.0f);
     return spec;
 };
 
