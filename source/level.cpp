@@ -191,7 +191,7 @@ BOOL Level::LoadH2B(const std::string& h2bFilePath, H2B::INSTANCED_MESH& instanc
 			H2B::MATERIAL2 mat = H2B::MATERIAL2(p.materials[m.materialIndex]);
 			m.drawInfo.indexOffset += index_count;
 			m.materialIndex = materials.GetMaterialID(mat);
-			m.textureIndex = textures.GetTextureID(mat);
+			m.colorTextureIndex = textures.GetTextureID(mat);
 			m.hasColorTexture = !mat.map_Kd.empty();
 			instancedMesh.subMeshes.push_back(m);
 		}

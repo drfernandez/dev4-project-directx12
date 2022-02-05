@@ -34,7 +34,7 @@ namespace H2B
 		BATCH drawInfo;
 		unsigned int materialIndex;
 		unsigned int hasColorTexture;
-		unsigned int textureIndex;
+		unsigned int colorTextureIndex;
 
 		MESH2()
 		{
@@ -42,7 +42,7 @@ namespace H2B
 			drawInfo = { };
 			materialIndex = 0;
 			hasColorTexture = 0;
-			textureIndex = 0;
+			colorTextureIndex = 0;
 		}
 		MESH2(const MESH& m)
 		{
@@ -50,7 +50,7 @@ namespace H2B
 			drawInfo = m.drawInfo;
 			materialIndex = m.materialIndex;
 			hasColorTexture = 0;
-			textureIndex = 0;
+			colorTextureIndex = 0;
 		}
 	};
 	struct MATERIAL2

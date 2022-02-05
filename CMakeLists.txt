@@ -30,10 +30,12 @@ if(WIN32)
 	set(VERTEX_SHADERS 
 		# add vertex shader (.hlsl) files here
 		shaders/vertexshader.hlsl
+		shaders/vertexshaderskybox.hlsl
 	)
 	set(PIXEL_SHADERS 
 		# add pixel shader (.hlsl) files here
 		shaders/pixelshader.hlsl
+		shaders/pixelshaderskybox.hlsl
 	)
 
 	# Add any new C/C++ source code here
@@ -49,7 +51,8 @@ if(WIN32)
 	set_source_files_properties( ${VERTEX_SHADERS} PROPERTIES 
 		VS_SHADER_TYPE Vertex 
 		VS_SHADER_MODEL 5.1 
-		VS_SHADER_ENTRYPOINT main 
+		VS_SHADER_ENTRYPOINT main
+		VS_SHADER_FLAGS /enable_unbounded_descriptor_tables
 		#VS_TOOL_OVERRIDE "None"
 		#VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
 		#VS_SHADER_VARIABLE_NAME "%(Filename)"

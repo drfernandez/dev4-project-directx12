@@ -50,6 +50,7 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature>					rootSignature;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipeline;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipelineSkybox;
 
 	UINT														cbvDescriptorSize;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				cbvsrvuavHeap;
@@ -71,8 +72,11 @@ private:
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferLightHandle;
 	H2B::LIGHT*													structuredBufferLightData;
 
-	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDDS;
-	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceUpload;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuse;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuseUpload;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceSkybox;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceSkyboxUpload;
 
 	Level														currentLevel;
 
@@ -84,6 +88,22 @@ private:
 	BOOL LoadLevelDataFromFile(const std::string& filename);
 	bool OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandle, std::string& fileName);
 	VOID WaitForGpu();
+	HRESULT LoadVertexData(Microsoft::WRL::ComPtr<ID3D12Device> device,
+		void* data, UINT strideInBytes, UINT bufferSizeInBytes,
+		Microsoft::WRL::ComPtr<ID3D12Resource>& resource, D3D12_VERTEX_BUFFER_VIEW& vertexView);
+	HRESULT LoadIndexData(Microsoft::WRL::ComPtr<ID3D12Device> device,
+		void* data, DXGI_FORMAT format, UINT bufferSizeInBytes,
+		Microsoft::WRL::ComPtr<ID3D12Resource>& resource, D3D12_INDEX_BUFFER_VIEW& indexView);
+	HRESULT CreateHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
+		UINT numDescriptors, D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_DESCRIPTOR_HEAP_FLAGS flags,
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& resource, UINT& descriptorSize);
+	HRESULT CreateConstantBufferView(Microsoft::WRL::ComPtr<ID3D12Device> device,
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap, const UINT heapDescriptorSize, UINT heapOffset,
+		UINT bufferSizeInBytes,	Microsoft::WRL::ComPtr<ID3D12Resource>& resource, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle);
+	HRESULT CreateStructuredBufferView(Microsoft::WRL::ComPtr<ID3D12Device> device,
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap, const UINT heapDescriptorSize, UINT heapOffset,
+		UINT numAttributes, UINT attributeStride,
+		Microsoft::WRL::ComPtr<ID3D12Resource>& resource, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle);
 	HRESULT LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& cmd,
 		Microsoft::WRL::ComPtr<ID3D12Resource>& resource, Microsoft::WRL::ComPtr<ID3D12Resource>& upload,
 		const std::wstring filepath, bool& IsCubeMap);
@@ -203,14 +223,17 @@ VOID Renderer::ReleaseLevelResources()
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferAttributesResource);
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferInstanceResource);
 	D3D12_COMPTR_SAFE_RELEASE(structuredBufferLightResource);	
-	UINT resourceSize = textureResourceDDS.size();
+	UINT resourceSize = textureResourceDiffuse.size();
 	for (UINT i = 0; i < resourceSize; i++)
 	{
-		D3D12_COMPTR_SAFE_RELEASE(textureResourceDDS[i]);
-		D3D12_COMPTR_SAFE_RELEASE(textureResourceUpload[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceDiffuse[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceDiffuseUpload[i]);
 	}
-	textureResourceDDS.clear();
-	textureResourceUpload.clear();
+	textureResourceDiffuse.clear();
+	textureResourceDiffuseUpload.clear();
+
+	D3D12_COMPTR_SAFE_RELEASE(textureResourceSkybox);
+	D3D12_COMPTR_SAFE_RELEASE(textureResourceSkyboxUpload);
 
 	constantBufferSceneData = nullptr;
 	structuredBufferAttributesData = nullptr;
@@ -236,111 +259,59 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 
 	worldCamera = currentLevel.camera;
 
-
 	HRESULT hr = E_NOTIMPL;
-
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// vertex buffer creation
-		UINT vertexBufferSize = sizeof(H2B::VERTEX) * currentLevel.vertex_count;
-		hr = device->CreateCommittedResource( // using UPLOAD heap for simplicity
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), // DEFAULT recommend  
-			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
-			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(vertexBuffer.ReleaseAndGetAddressOf()));
-
-		UINT8* transferMemoryLocation = nullptr;
-		hr = vertexBuffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&transferMemoryLocation));
-		memcpy(transferMemoryLocation, currentLevel.vertices.data(), vertexBufferSize);
-		vertexBuffer->Unmap(0, nullptr);
-		// Create a vertex View to send to a Draw() call.
-		vertexView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
-		vertexView.StrideInBytes = sizeof(H2B::VERTEX);
-		vertexView.SizeInBytes = vertexBufferSize;
+		UINT vertexBufferStride = sizeof(H2B::VERTEX);
+		UINT vertexBufferSize = vertexBufferStride * currentLevel.vertex_count;
+		void* vertexBufferData = currentLevel.vertices.data();
+		hr = LoadVertexData(device, 
+			vertexBufferData, vertexBufferStride, vertexBufferSize,
+			vertexBuffer, vertexView);
+		if (FAILED(hr))
+		{
+			abort();
+		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// index buffer creation
+		DXGI_FORMAT indexBufferFormat = DXGI_FORMAT_R32_UINT;
 		UINT indexBufferSize = sizeof(UINT) * currentLevel.index_count;
-		hr = device->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-			D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize),
-			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(indexBuffer.ReleaseAndGetAddressOf()));
-
-		UINT8* transferMemoryLocation = nullptr;
-		hr = indexBuffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&transferMemoryLocation));
-		memcpy(transferMemoryLocation, currentLevel.indices.data(), indexBufferSize);
-		indexBuffer->Unmap(0, nullptr);
-		indexView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
-		indexView.Format = DXGI_FORMAT_R32_UINT;
-		indexView.SizeInBytes = indexBufferSize;
+		void* indexBufferData = currentLevel.indices.data();
+		hr = LoadIndexData(device, 
+			indexBufferData, indexBufferFormat, indexBufferSize,
+			indexBuffer, indexView);
+		if (FAILED(hr))
+		{
+			abort();
+		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 	// constant buffer (CBV) / structured buffer (SRV) creation
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// constant buffer heap creation
-		D3D12_DESCRIPTOR_HEAP_DESC cbvsrvuavHeapDesc = {};
-		cbvsrvuavHeapDesc.NumDescriptors = 4 + MAX_TEXTURES;		// X number of descriptors to create from cbv_srv_uav heap
-		cbvsrvuavHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		cbvsrvuavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		hr = device->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(cbvsrvuavHeap.ReleaseAndGetAddressOf()));
-		cbvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		CreateHeap(device, 5 + MAX_TEXTURES,
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+			D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+			cbvsrvuavHeap, cbvDescriptorSize);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		////////////////////////////////////////////////////////////////////////////////////////////////////
 		CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC();
-		{
-			UINT constantBufferSize = CalculateConstantBufferByteSize(sizeof(SCENE));
-			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
-			// commited resource for the constant buffer
-			hr = device->CreateCommittedResource(
-				&prop,
-				D3D12_HEAP_FLAG_NONE,
-				&resource_desc,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr,
-				IID_PPV_ARGS(constantBufferScene.ReleaseAndGetAddressOf()));
-
-			cbvSceneHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 0, cbvDescriptorSize);
-
-			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-			cbvDesc.BufferLocation = constantBufferScene->GetGPUVirtualAddress();
-			cbvDesc.SizeInBytes = constantBufferSize;    // CB size is required to be 256-byte aligned.
-			// create CBV
-			device->CreateConstantBufferView(&cbvDesc, cbvSceneHandle);
-		}
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		CreateConstantBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 0, 
+			sizeof(SCENE), constantBufferScene, cbvSceneHandle);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// materials
 		const UINT numAttributes = currentLevel.materials.GetMaterialCount();
-		if (numAttributes > 0)
-		{
-			// commited resource for the structured buffer
-			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(H2B::ATTRIBUTES) * numAttributes);
-			hr = device->CreateCommittedResource(
-				&prop,
-				D3D12_HEAP_FLAG_NONE,
-				&resource_desc,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr,
-				IID_PPV_ARGS(structuredBufferAttributesResource.ReleaseAndGetAddressOf()));
-
-			structuredBufferAttributeHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 1, cbvDescriptorSize);
-
-			// srv description
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.Buffer.FirstElement = 0;
-			srvDesc.Buffer.NumElements = numAttributes;
-			srvDesc.Buffer.StructureByteStride = sizeof(H2B::ATTRIBUTES);
-			// create SRV
-			device->CreateShaderResourceView(structuredBufferAttributesResource.Get(), &srvDesc, structuredBufferAttributeHandle);
-		}
+		CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 1,
+			numAttributes, sizeof(H2B::ATTRIBUTES), structuredBufferAttributesResource, structuredBufferAttributeHandle);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -413,11 +384,12 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			allocator->Reset();
 			cmd->Reset(allocator, nullptr);
 
-			UINT heapOffset = 4;
+			UINT heapOffset = 5;
 
-			textureResourceDDS.resize(numTextures);
-			textureResourceUpload.resize(numTextures);
+			textureResourceDiffuse.resize(numTextures);
+			textureResourceDiffuseUpload.resize(numTextures);
 			bool* IsCubeMap = new bool[numTextures];
+			memset(IsCubeMap, 1, sizeof(bool)* numTextures);
 
 			Microsoft::WRL::ComPtr<ID3D12Device> d(device);
 			Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
@@ -428,10 +400,10 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				std::string current_name = "../textures/" + names[i].substr(0, names[i].size() - 3) + "dds";
 				std::wstring wide_string(current_name.begin(), current_name.end());
 
-				hr = LoadTexture(d, c, textureResourceDDS[i], textureResourceUpload[i], wide_string, IsCubeMap[i]);
+				hr = LoadTexture(d, c, textureResourceDiffuse[i], textureResourceDiffuseUpload[i], wide_string, IsCubeMap[i]);
 				if (SUCCEEDED(hr))
 				{
-					D3D12_RESOURCE_DESC resourceDesc = textureResourceDDS[i]->GetDesc();
+					D3D12_RESOURCE_DESC resourceDesc = textureResourceDiffuse[i]->GetDesc();
 					D3D12_SHADER_RESOURCE_VIEW_DESC ddsSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC();
 					ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 					ddsSrvDesc.Format = resourceDesc.Format;
@@ -439,16 +411,16 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 					ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
 
 					CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset, cbvDescriptorSize);
-					device->CreateShaderResourceView(textureResourceDDS[i].Get(), &ddsSrvDesc, descHandle);
+					device->CreateShaderResourceView(textureResourceDiffuse[i].Get(), &ddsSrvDesc, descHandle);
 				}
 				heapOffset++;
 			}
 
 			UINT lastEntry = numTextures - 1;
-			hr = LoadTexture(d, c, textureResourceDDS[lastEntry], textureResourceUpload[lastEntry], L"../textures/uvmapping.dds", IsCubeMap[lastEntry]);
+			hr = LoadTexture(d, c, textureResourceDiffuse[lastEntry], textureResourceDiffuseUpload[lastEntry], L"../textures/uvmapping.dds", IsCubeMap[lastEntry]);
 			if (SUCCEEDED(hr))
 			{
-				D3D12_RESOURCE_DESC resourceDesc = textureResourceDDS[lastEntry]->GetDesc();
+				D3D12_RESOURCE_DESC resourceDesc = textureResourceDiffuse[lastEntry]->GetDesc();
 				D3D12_SHADER_RESOURCE_VIEW_DESC ddsSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC();
 				ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 				ddsSrvDesc.Format = resourceDesc.Format;
@@ -458,7 +430,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				for (UINT i = lastEntry; i < MAX_TEXTURES; i++)
 				{
 					CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset, cbvDescriptorSize);
-					device->CreateShaderResourceView(textureResourceDDS[lastEntry].Get(), &ddsSrvDesc, descHandle);
+					device->CreateShaderResourceView(textureResourceDiffuse[lastEntry].Get(), &ddsSrvDesc, descHandle);
 					heapOffset++;
 				}
 			}
@@ -575,6 +547,141 @@ VOID Renderer::WaitForGpu()
 	fenceValues++;
 	ref = commandQueue->Release();
 	ref = fence->Release();
+}
+
+inline HRESULT Renderer::LoadVertexData(Microsoft::WRL::ComPtr<ID3D12Device> device,
+	void* data, UINT strideInBytes, UINT bufferSizeInBytes,
+	Microsoft::WRL::ComPtr<ID3D12Resource>& resource, D3D12_VERTEX_BUFFER_VIEW& vertexView)
+{
+	HRESULT hr = E_NOTIMPL;
+	UINT vertexBufferSize = bufferSizeInBytes;
+	hr = device->CreateCommittedResource( // using UPLOAD heap for simplicity
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), // DEFAULT recommend  
+		D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
+		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(resource.ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) return hr;
+
+	UINT8* transferMemoryLocation = nullptr;
+	hr = resource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&transferMemoryLocation));
+	if (FAILED(hr)) return hr;
+	memcpy(transferMemoryLocation, data, vertexBufferSize);
+	resource->Unmap(0, nullptr);
+	// Create a vertex View to send to a Draw() call.
+	vertexView.BufferLocation = resource->GetGPUVirtualAddress();
+	vertexView.StrideInBytes = strideInBytes;
+	vertexView.SizeInBytes = vertexBufferSize;
+	return hr;
+}
+
+inline HRESULT Renderer::LoadIndexData(Microsoft::WRL::ComPtr<ID3D12Device> device,
+	void* data, DXGI_FORMAT format, UINT bufferSizeInBytes,
+	Microsoft::WRL::ComPtr<ID3D12Resource>& resource, D3D12_INDEX_BUFFER_VIEW& indexView)
+{
+	HRESULT hr = E_NOTIMPL;
+	UINT indexBufferSize = bufferSizeInBytes;
+	hr = device->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+		D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize),
+		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(resource.ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) return hr;
+
+	UINT8* transferMemoryLocation = nullptr;
+	hr = resource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&transferMemoryLocation));
+	if (FAILED(hr)) return hr;
+	memcpy(transferMemoryLocation, data, indexBufferSize);
+	resource->Unmap(0, nullptr);
+	indexView.BufferLocation = resource->GetGPUVirtualAddress();
+	indexView.Format = format;
+	indexView.SizeInBytes = indexBufferSize;
+	return hr;
+}
+
+inline HRESULT Renderer::CreateHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
+	UINT numDescriptors, D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_DESCRIPTOR_HEAP_FLAGS flags,
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& resource, UINT& descriptorSize)
+{
+	HRESULT hr = E_NOTIMPL;
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	// heap creation
+	D3D12_DESCRIPTOR_HEAP_DESC cbvsrvuavHeapDesc = {};
+	cbvsrvuavHeapDesc.NumDescriptors = numDescriptors;
+	cbvsrvuavHeapDesc.Type = type;
+	cbvsrvuavHeapDesc.Flags = flags;
+	hr = device->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(resource.ReleaseAndGetAddressOf()));
+
+	descriptorSize = device->GetDescriptorHandleIncrementSize(type);
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	return hr;
+}
+
+inline HRESULT Renderer::CreateConstantBufferView(Microsoft::WRL::ComPtr<ID3D12Device> device,
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap, const UINT heapDescriptorSize, UINT heapOffset,
+	UINT bufferSizeInBytes, Microsoft::WRL::ComPtr<ID3D12Resource>& resource, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle)
+{
+	HRESULT hr = E_NOTIMPL;
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC();
+	UINT constantBufferSize = CalculateConstantBufferByteSize(bufferSizeInBytes);
+	resource_desc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
+	// commited resource for the constant buffer
+	hr = device->CreateCommittedResource(
+		&prop,
+		D3D12_HEAP_FLAG_NONE,
+		&resource_desc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(resource.ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) return hr;
+
+	handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(heap->GetCPUDescriptorHandleForHeapStart(), heapOffset, heapDescriptorSize);
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+	cbvDesc.BufferLocation = resource->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = constantBufferSize;    // CB size is required to be 256-byte aligned.
+	// create CBV
+	device->CreateConstantBufferView(&cbvDesc, handle);
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	return hr;
+}
+
+inline HRESULT Renderer::CreateStructuredBufferView(Microsoft::WRL::ComPtr<ID3D12Device> device,
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap, const UINT heapDescriptorSize, UINT heapOffset,
+	UINT numAttributes, UINT attributeStride,
+	Microsoft::WRL::ComPtr<ID3D12Resource>& resource, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle)
+{
+	HRESULT hr = E_NOTIMPL;
+	//const UINT numAttributes = currentLevel.materials.GetMaterialCount();
+	if (numAttributes > 0)
+	{
+		// commited resource for the structured buffer
+		CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC();
+		resource_desc = CD3DX12_RESOURCE_DESC::Buffer(attributeStride * numAttributes);
+		hr = device->CreateCommittedResource(
+			&prop,
+			D3D12_HEAP_FLAG_NONE,
+			&resource_desc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(resource.ReleaseAndGetAddressOf()));
+		if (FAILED(hr)) return hr;
+
+		handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(heap->GetCPUDescriptorHandleForHeapStart(), heapOffset, heapDescriptorSize);
+
+		// srv description
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Buffer.FirstElement = 0;
+		srvDesc.Buffer.NumElements = numAttributes;
+		srvDesc.Buffer.StructureByteStride = attributeStride;
+		// create SRV
+		device->CreateShaderResourceView(resource.Get(), &srvDesc, handle);
+	}
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	return hr;
 }
 
 HRESULT Renderer::LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& cmd,
@@ -694,26 +801,52 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 #if _DEBUG
 	compilerFlags |= D3DCOMPILE_DEBUG;
 #endif
-	std::string vertexShaderString = ShaderAsString("../shaders/vertexshader.hlsl");
-	std::string pixelShaderString = ShaderAsString("../shaders/pixelshader.hlsl");
+
+
+	std::string vertexShaders[] = 
+	{
+		"../shaders/vertexshader.hlsl",
+		"../shaders/vertexshaderskybox.hlsl"
+	};
+	std::string pixelShaders[] =
+	{
+		"../shaders/pixelshader.hlsl",
+		"../shaders/pixelshaderskybox.hlsl"
+	};
 
 	// Create Vertex Shader
-	Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, errors;
-	if (FAILED(D3DCompile(vertexShaderString.c_str(), vertexShaderString.length(),
-		nullptr, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_1", compilerFlags, 0,
-		vsBlob.GetAddressOf(), errors.GetAddressOf())))
+	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> vsBlob;
+	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> psBlob;
+	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> vsErrors;
+	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> psErrors;
+
+	vsBlob.resize(ARRAYSIZE(vertexShaders));
+	vsErrors.resize(ARRAYSIZE(vertexShaders));
+	psBlob.resize(ARRAYSIZE(pixelShaders));
+	psErrors.resize(ARRAYSIZE(pixelShaders));
+
+	for (UINT i = 0; i < ARRAYSIZE(vertexShaders); i++)
 	{
-		std::cout << (char*)errors->GetBufferPointer() << std::endl;
-		abort();
+		std::string vertexShaderString = ShaderAsString(vertexShaders[i].c_str());
+		if (FAILED(D3DCompile(vertexShaderString.c_str(), vertexShaderString.length(),
+			nullptr, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_1", compilerFlags, 0,
+			vsBlob[i].ReleaseAndGetAddressOf(), vsErrors[i].ReleaseAndGetAddressOf())))
+		{
+			std::cout << (char*)vsErrors[i]->GetBufferPointer() << std::endl;
+			abort();
+		}
 	}
 	// Create Pixel Shader
-	Microsoft::WRL::ComPtr<ID3DBlob> psBlob; errors.Reset();
-	if (FAILED(D3DCompile(pixelShaderString.c_str(), pixelShaderString.length(),
-		nullptr, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_1", compilerFlags, 0,
-		psBlob.GetAddressOf(), errors.GetAddressOf())))
+	for (UINT i = 0; i < ARRAYSIZE(pixelShaders); i++)
 	{
-		std::cout << (char*)errors->GetBufferPointer() << std::endl;
-		abort();
+		std::string pixelShaderString = ShaderAsString(pixelShaders[i].c_str());
+		if (FAILED(D3DCompile(pixelShaderString.c_str(), pixelShaderString.length(),
+			nullptr, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_1", compilerFlags, 0,
+			psBlob[i].ReleaseAndGetAddressOf(), psErrors[i].ReleaseAndGetAddressOf())))
+		{
+			std::cout << (char*)psErrors[i]->GetBufferPointer() << std::endl;
+			abort();
+		}
 	}
 	// Create Input Layout
 	D3D12_INPUT_ELEMENT_DESC format[] =
@@ -723,16 +856,18 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		{ "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
-	CD3DX12_DESCRIPTOR_RANGE1 ranges[1] = {};
-	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+	CD3DX12_DESCRIPTOR_RANGE1 ranges[2] = {};
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0);
+	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
-	CD3DX12_ROOT_PARAMETER1 rootParameters[6] = {};
-	rootParameters[0].InitAsConstants(4, 0, 0);			// num32bitConstants, register, space  (mesh_id)	b0
-	rootParameters[1].InitAsConstantBufferView(1, 0);	// register, space	(view,projection)				b1
-	rootParameters[2].InitAsShaderResourceView(0, 0);	// register, space	(OBJ_ATTRIBUTES)				t0
-	rootParameters[3].InitAsShaderResourceView(1, 0);	// register, space	(instance matrix data)			t1
-	rootParameters[4].InitAsShaderResourceView(2, 0);	// register, space	(light data)					t2
-	rootParameters[5].InitAsDescriptorTable(1, &ranges[0]);
+	CD3DX12_ROOT_PARAMETER1 rootParameters[7] = {};
+	rootParameters[0].InitAsConstants(4, 0, 0);					// num32bitConstants, register, space  (mesh_id)	b0, spaec0
+	rootParameters[1].InitAsConstantBufferView(1, 0);			// register, space	(view,projection)				b1, spaec0
+	rootParameters[2].InitAsShaderResourceView(0, 0);			// register, space	(OBJ_ATTRIBUTES)				t0, spaec0
+	rootParameters[3].InitAsShaderResourceView(1, 0);			// register, space	(instance matrix data)			t1, spaec0
+	rootParameters[4].InitAsShaderResourceView(2, 0);			// register, space	(light data)					t2, spaec0
+	rootParameters[5].InitAsDescriptorTable(1, &ranges[0]);		// count, table(s) (skybox texture)					t3, space0
+	rootParameters[6].InitAsDescriptorTable(1, &ranges[1]);		// count, table(s) (color textures)					t0, space1
 
 	// static samplers
 	CD3DX12_STATIC_SAMPLER_DESC sampler = CD3DX12_STATIC_SAMPLER_DESC(
@@ -752,7 +887,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		1, &sampler, 
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-	Microsoft::WRL::ComPtr<ID3DBlob> signature;
+	Microsoft::WRL::ComPtr<ID3DBlob> signature, errors;
 	hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc,
 		D3D_ROOT_SIGNATURE_VERSION_1_1, &signature, &errors);
 	if(FAILED(hr))
@@ -768,8 +903,8 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psDesc = {};
 	psDesc.InputLayout = { format, ARRAYSIZE(format) };
 	psDesc.pRootSignature = rootSignature.Get();
-	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob.Get());
-	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob.Get());
+	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[0].Get());
+	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[0].Get());
 	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 	psDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
@@ -781,6 +916,16 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	psDesc.SampleDesc.Count = 1;
 	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipeline));
 	if(FAILED(hr))
+	{
+		abort();
+	}
+
+	// create pipeline state
+	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[1].Get());
+	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[1].Get());
+	psDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipelineSkybox));
+	if (FAILED(hr))
 	{
 		abort();
 	}
@@ -839,34 +984,38 @@ VOID Renderer::Render()
 
 	if (constantBufferScene)
 	{
-		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress() + 0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
+		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress();// +0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
 		cmd->SetGraphicsRootConstantBufferView(1, cbvHandle);
 	}
 	if (structuredBufferAttributesResource)
 	{
-		D3D12_GPU_VIRTUAL_ADDRESS srvAttributesHandle = structuredBufferAttributesResource->GetGPUVirtualAddress() + 0U * (sizeof(H2B::ATTRIBUTES));
+		D3D12_GPU_VIRTUAL_ADDRESS srvAttributesHandle = structuredBufferAttributesResource->GetGPUVirtualAddress();// +0U * (sizeof(H2B::ATTRIBUTES));
 		cmd->SetGraphicsRootShaderResourceView(2, srvAttributesHandle);
 	}
 	if (structuredBufferInstanceResource)
 	{
-		D3D12_GPU_VIRTUAL_ADDRESS srvInstanceHandle = structuredBufferInstanceResource->GetGPUVirtualAddress() + 0U * sizeof(GW::MATH::GMATRIXF);
+		D3D12_GPU_VIRTUAL_ADDRESS srvInstanceHandle = structuredBufferInstanceResource->GetGPUVirtualAddress();// +0U * sizeof(GW::MATH::GMATRIXF);
 		cmd->SetGraphicsRootShaderResourceView(3, srvInstanceHandle);
 	}
 	if (structuredBufferLightResource)
 	{
-		D3D12_GPU_VIRTUAL_ADDRESS srvLightHandle = structuredBufferLightResource->GetGPUVirtualAddress() + 0U * sizeof(H2B::LIGHT);
+		D3D12_GPU_VIRTUAL_ADDRESS srvLightHandle = structuredBufferLightResource->GetGPUVirtualAddress();// +0U * sizeof(H2B::LIGHT);
 		cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
 	}
 
-	CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
+	CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
+	cmd->SetGraphicsRootDescriptorTable(6, cubemapSrvHandle);
+
+	CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5, cbvDescriptorSize);
 	cmd->SetGraphicsRootDescriptorTable(5, srvHandle);
+
 
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
 		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 		{
 			// mesh_id, material_id, has_texture, texture_id			
-			UINT root32BitConstants[] = { mesh.second.meshIndex, submesh.materialIndex, submesh.hasColorTexture, submesh.textureIndex };
+			UINT root32BitConstants[] = { mesh.second.meshIndex, submesh.materialIndex, submesh.hasColorTexture, submesh.colorTextureIndex };
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 		}
@@ -885,7 +1034,6 @@ VOID Renderer::Update(FLOAT deltaTime)
 	{
 		UpdateCamera(deltaTime);
 	}
-
 
 	GW::MATH::GVECTORF campos = worldCamera.row4;
 	campos.w = currentLevel.uniqueLights.size();
