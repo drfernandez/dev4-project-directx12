@@ -99,7 +99,8 @@ private:
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& resource, UINT& descriptorSize);
 	HRESULT CreateConstantBufferView(Microsoft::WRL::ComPtr<ID3D12Device> device,
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap, const UINT heapDescriptorSize, UINT heapOffset,
-		UINT bufferSizeInBytes,	Microsoft::WRL::ComPtr<ID3D12Resource>& resource, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle);
+		UINT numBuffers, UINT bufferSizeInBytes,
+		Microsoft::WRL::ComPtr<ID3D12Resource>& resource, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle);
 	HRESULT CreateStructuredBufferView(Microsoft::WRL::ComPtr<ID3D12Device> device,
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap, const UINT heapDescriptorSize, UINT heapOffset,
 		UINT numAttributes, UINT attributeStride,
@@ -304,7 +305,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC();
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		CreateConstantBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 0, 
-			sizeof(SCENE), constantBufferScene, cbvSceneHandle);
+			1, sizeof(SCENE), constantBufferScene, cbvSceneHandle);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -316,62 +317,16 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// instance data for matrices
-		const UINT numInstances = currentLevel.instanceData.size();
-		if (numInstances > 0)
-		{
-			// commited resource for the structured buffer
-			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(GW::MATH::GMATRIXF) * numInstances);
-			hr = device->CreateCommittedResource(
-				&prop,
-				D3D12_HEAP_FLAG_NONE,
-				&resource_desc,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr,
-				IID_PPV_ARGS(structuredBufferInstanceResource.ReleaseAndGetAddressOf()));
-
-			structuredBufferInstanceHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 2, cbvDescriptorSize);
-
-			// srv description
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.Buffer.FirstElement = 0;
-			srvDesc.Buffer.NumElements = numInstances;
-			srvDesc.Buffer.StructureByteStride = sizeof(GW::MATH::GMATRIXF);
-			// create SRV
-			device->CreateShaderResourceView(structuredBufferInstanceResource.Get(), &srvDesc, structuredBufferInstanceHandle);
-		}
+		const UINT numInstances = currentLevel.instanceData.size() + 1;
+		CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 2,
+			numInstances, sizeof(GW::MATH::GMATRIXF), structuredBufferInstanceResource, structuredBufferInstanceHandle);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// lighting information
 		const UINT numLights = currentLevel.uniqueLights.size();
-		if (numLights > 0)
-		{
-			// commited resource for the structured buffer
-			resource_desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(H2B::LIGHT) * numLights);
-			hr = device->CreateCommittedResource(
-				&prop,
-				D3D12_HEAP_FLAG_NONE,
-				&resource_desc,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
-				nullptr,
-				IID_PPV_ARGS(structuredBufferLightResource.ReleaseAndGetAddressOf()));
-
-			structuredBufferLightHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 3, cbvDescriptorSize);
-
-			// srv description
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-			srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			srvDesc.Buffer.FirstElement = 0;
-			srvDesc.Buffer.NumElements = numLights;
-			srvDesc.Buffer.StructureByteStride = sizeof(H2B::LIGHT);
-			// create SRV
-			device->CreateShaderResourceView(structuredBufferLightResource.Get(), &srvDesc, structuredBufferLightHandle);
-		}
+		CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 3,
+			numLights, sizeof(H2B::LIGHT), structuredBufferLightResource, structuredBufferLightHandle);
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -408,12 +363,21 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 					ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 					ddsSrvDesc.Format = resourceDesc.Format;
 					ddsSrvDesc.ViewDimension = (IsCubeMap[i]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
-					ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
 
-					CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset, cbvDescriptorSize);
-					device->CreateShaderResourceView(textureResourceDiffuse[i].Get(), &ddsSrvDesc, descHandle);
+					if (IsCubeMap[i])
+					{
+						ddsSrvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
+						CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
+						device->CreateShaderResourceView(textureResourceDiffuse[i].Get(), &ddsSrvDesc, descHandle);
+					}
+					else
+					{
+						ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
+						CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset, cbvDescriptorSize);
+						device->CreateShaderResourceView(textureResourceDiffuse[i].Get(), &ddsSrvDesc, descHandle);
+					}
+					heapOffset++;
 				}
-				heapOffset++;
 			}
 
 			UINT lastEntry = numTextures - 1;
@@ -461,16 +425,6 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			{
 				memcpy(structuredBufferAttributesData, currentLevel.materials.GetMaterials().data(), sizeof(H2B::ATTRIBUTES)* numAttributes);
 				structuredBufferAttributesResource->Unmap(0, nullptr);
-			}
-		}
-
-		if (structuredBufferInstanceResource)
-		{
-			hr = structuredBufferInstanceResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&structuredBufferInstanceData));
-			if (SUCCEEDED(hr))
-			{
-				memcpy(structuredBufferInstanceData, currentLevel.instanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
-				structuredBufferInstanceResource->Unmap(0, nullptr);
 			}
 		}
 
@@ -616,13 +570,14 @@ inline HRESULT Renderer::CreateHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
 
 inline HRESULT Renderer::CreateConstantBufferView(Microsoft::WRL::ComPtr<ID3D12Device> device,
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap, const UINT heapDescriptorSize, UINT heapOffset,
-	UINT bufferSizeInBytes, Microsoft::WRL::ComPtr<ID3D12Resource>& resource, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle)
+	UINT numBuffers, UINT bufferSizeInBytes, 
+	Microsoft::WRL::ComPtr<ID3D12Resource>& resource, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle)
 {
 	HRESULT hr = E_NOTIMPL;
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 	CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC();
-	UINT constantBufferSize = CalculateConstantBufferByteSize(bufferSizeInBytes);
+	UINT constantBufferSize = CalculateConstantBufferByteSize(bufferSizeInBytes) * numBuffers;
 	resource_desc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
 	// commited resource for the constant buffer
 	hr = device->CreateCommittedResource(
@@ -856,11 +811,12 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		{ "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
-	CD3DX12_DESCRIPTOR_RANGE1 ranges[2] = {};
-	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0);
+	CD3DX12_DESCRIPTOR_RANGE1 ranges[3] = {};
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
-	CD3DX12_ROOT_PARAMETER1 rootParameters[7] = {};
+	CD3DX12_ROOT_PARAMETER1 rootParameters[8] = {};
 	rootParameters[0].InitAsConstants(4, 0, 0);					// num32bitConstants, register, space  (mesh_id)	b0, spaec0
 	rootParameters[1].InitAsConstantBufferView(1, 0);			// register, space	(view,projection)				b1, spaec0
 	rootParameters[2].InitAsShaderResourceView(0, 0);			// register, space	(OBJ_ATTRIBUTES)				t0, spaec0
@@ -868,6 +824,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	rootParameters[4].InitAsShaderResourceView(2, 0);			// register, space	(light data)					t2, spaec0
 	rootParameters[5].InitAsDescriptorTable(1, &ranges[0]);		// count, table(s) (skybox texture)					t3, space0
 	rootParameters[6].InitAsDescriptorTable(1, &ranges[1]);		// count, table(s) (color textures)					t0, space1
+	rootParameters[7].InitAsDescriptorTable(1, &ranges[2]);		// count, table(s) (normal textures)				t0, space2
 
 	// static samplers
 	CD3DX12_STATIC_SAMPLER_DESC sampler = CD3DX12_STATIC_SAMPLER_DESC(
@@ -905,7 +862,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	psDesc.pRootSignature = rootSignature.Get();
 	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[0].Get());
 	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[0].Get());
-	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);		
 	psDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psDesc.SampleMask = UINT_MAX;
@@ -939,6 +896,11 @@ Renderer::~Renderer()
 	if (constantBufferScene)
 	{
 		constantBufferScene->Unmap(0, nullptr);
+	}
+
+	if (structuredBufferInstanceResource)
+	{
+		structuredBufferInstanceResource->Unmap(0, nullptr);
 	}
 
 	ReleaseLevelResources();
@@ -1004,10 +966,10 @@ VOID Renderer::Render()
 	}
 
 	CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
-	cmd->SetGraphicsRootDescriptorTable(6, cubemapSrvHandle);
+	cmd->SetGraphicsRootDescriptorTable(5, cubemapSrvHandle);
 
 	CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5, cbvDescriptorSize);
-	cmd->SetGraphicsRootDescriptorTable(5, srvHandle);
+	cmd->SetGraphicsRootDescriptorTable(6, srvHandle);
 
 
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
@@ -1020,12 +982,24 @@ VOID Renderer::Render()
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 		}
 	}
+
+	cmd->SetPipelineState(pipelineSkybox.Get());
+	for (const auto& mesh : currentLevel.uniqueSkyboxes)	// skybox count
+	{
+		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
+		{
+			UINT root32BitConstants[] = { mesh.second.meshIndex, submesh.materialIndex, submesh.hasColorTexture, submesh.colorTextureIndex };
+			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
+			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
+		}
+	}
 	// release temp handles
 	cmd->Release();
 }
 
 VOID Renderer::Update(FLOAT deltaTime)
 {
+	HRESULT hr = E_NOTIMPL;
 	GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE wndHandle;
 	win.GetWindowHandle(wndHandle);
 	BOOL IsFocusWindow = GetFocus() == (HWND&)wndHandle;
@@ -1047,5 +1021,18 @@ VOID Renderer::Update(FLOAT deltaTime)
 	if (constantBufferSceneData)
 	{
 		memcpy(constantBufferSceneData, &scene, sizeof(SCENE));
+	}
+
+	if (structuredBufferInstanceResource)
+	{
+		UINT numInstances = currentLevel.instanceData.size() + 1;
+		hr = structuredBufferInstanceResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&structuredBufferInstanceData));
+		if (SUCCEEDED(hr))
+		{
+			memcpy(structuredBufferInstanceData, currentLevel.instanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
+			GW::MATH::GMATRIXF skyboxWorldMatrix = GW::MATH::GIdentityMatrixF;
+			skyboxWorldMatrix.row4 = worldCamera.row4;
+			memcpy(&structuredBufferInstanceData[numInstances - 1], &skyboxWorldMatrix, sizeof(GW::MATH::GMATRIXF));
+		}
 	}
 }

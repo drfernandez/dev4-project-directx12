@@ -29,7 +29,9 @@ StructuredBuffer<ATTRIBUTES> AttributesData : register(t0, space0);
 StructuredBuffer<matrix> InstanceData : register(t1, space0);
 StructuredBuffer<LIGHT> LightData : register(t2, space0);
 
+TextureCube skybox : register(t3, space1);
 Texture2D color_texture[] : register(t0, space1);
+Texture2D normal_texture[] : register(t0, space2);
 SamplerState filter : register(s0, space0);
 
 float4 main(PS_IN input) : SV_TARGET

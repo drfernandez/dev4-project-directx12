@@ -44,6 +44,6 @@ VS_OUT main(VS_IN input, uint id : SV_InstanceID)
     p = mul(SceneData.view, p);
     p = mul(SceneData.projection, p);
     
-    VS_OUT output = { p, u };
+    VS_OUT output = { p.xyww, u };
     return output;
 }

@@ -246,8 +246,7 @@ void Level::LoadMeshFromFile()
 	{
 		container[assetName].numInstances += 1;
 		container[assetName].matrices.push_back(world);
-	}
-	
+	}	
 }
 
 void Level::LoadLightFromFile()
