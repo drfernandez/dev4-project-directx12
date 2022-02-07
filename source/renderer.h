@@ -8,6 +8,8 @@
 #include "d3dx12.h" // official helper file provided by microsoft
 #include "level.h"
 #include <DDSTextureLoader.h>
+#include <locale> 
+#include <codecvt>
 
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
@@ -475,7 +477,12 @@ bool Renderer::OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandl
 	if (GetOpenFileNameW(&ofn) == TRUE)
 	{
 		std::wstring ws(ofn.lpstrFile);
-		fileName = std::string(ws.begin(), ws.end());
+		//setup converter
+		using convert_type = std::codecvt_utf8<wchar_t>;
+		std::wstring_convert<convert_type, wchar_t> converter;
+		//use converter (.to_bytes: wstr->str, .from_bytes: str->wstr)
+		fileName = converter.to_bytes(ws);		
+		//fileName = std::string(ws.begin(), ws.end());
 		result = true;
 	}
 	return result;
@@ -484,8 +491,8 @@ bool Renderer::OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandl
 // Wait for pending GPU work to complete.
 VOID Renderer::WaitForGpu()
 {
-	ID3D12CommandQueue* commandQueue;
-	ID3D12Fence*	fence;
+	ID3D12CommandQueue* commandQueue = nullptr;
+	ID3D12Fence*	fence = nullptr;
 	ULONG ref = 0;
 
 	d3d.GetCommandQueue((void**)&commandQueue);
@@ -771,8 +778,8 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	// Create Vertex Shader
 	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> vsBlob;
-	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> psBlob;
 	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> vsErrors;
+	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> psBlob;
 	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> psErrors;
 
 	vsBlob.resize(ARRAYSIZE(vertexShaders));
