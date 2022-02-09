@@ -12,8 +12,10 @@ struct MESH_DATA
 {
     uint mesh_id;
     uint material_id;
-    uint has_texture;
-    uint texture_id;
+    uint has_texture_c;
+    uint has_texture_n;
+    uint texture_c_id;
+    uint texture_n_id;
 };
 
 struct SCENE
@@ -37,9 +39,9 @@ SamplerState filter : register(s0, space0);
 float4 main(PS_IN input) : SV_TARGET
 {
     ATTRIBUTES material = AttributesData[MeshData.material_id];
-    float4 texture_color = color_texture[MeshData.texture_id].Sample(filter, input.uv);
+    float4 texture_color = color_texture[MeshData.texture_c_id].Sample(filter, input.uv);
 
-    if (MeshData.has_texture)
+    if (MeshData.has_texture_c)
     {
         material.Kd = texture_color.rgb;
         material.d = texture_color.a;

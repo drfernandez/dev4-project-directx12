@@ -19,8 +19,10 @@ struct MESH_DATA
 {
     uint mesh_id;
     uint material_id;
-    uint has_texture;
-    uint texture_id;
+    uint has_texture_c;
+    uint has_texture_n;
+    uint texture_c_id;
+    uint texture_n_id;
 };
 
 struct SCENE
@@ -49,10 +51,6 @@ VS_OUT main(VS_IN input, uint id : SV_InstanceID)
     p = mul(SceneData.view, p);
     p = mul(SceneData.projection, p);
     n = mul(w, float4(n, 0.0f)).xyz;
-
-
-    //rsqrt(0.0);
-    //ddx(0.0f), ddy(0.0);
     
     VS_OUT output = { p, u, n, wp };    
     return output;

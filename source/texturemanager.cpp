@@ -22,9 +22,9 @@ TextureManager& TextureManager::operator=(const TextureManager& c)
 {
 	if (this != &c)
 	{
-		this->texture_count = c.texture_count;
-		this->textures = c.textures;
-		this->textureMap = c.textureMap;
+		this->textureColorCount = c.textureColorCount;
+		this->texturesColor = c.texturesColor;
+		this->textureColorMap = c.textureColorMap;
 	}
 	return *this;
 }
@@ -32,44 +32,57 @@ TextureManager& TextureManager::operator=(const TextureManager& c)
 VOID TextureManager::Clear()
 {
 	// set the count to 0
-	texture_count = 0;
+	textureColorCount = 0;
+	textureNormalCount = 0;
 	// clear the vector
-	textures.clear();
+	texturesColor.clear();
+	texturesNormal.clear();
 	// clear the map
-	textureMap.clear();
+	textureColorMap.clear();
+	textureNormalMap.clear();
 }
 
-const UINT TextureManager::GetTextureCount() const
+const UINT TextureManager::GetTextureColorCount() const
 {
 	// return the texture count
-	return texture_count;
+	return textureColorCount;
 }
 
-const std::vector<std::string> TextureManager::GetTextures() const
+const UINT TextureManager::GetTextureNormalCount() const
+{
+	return textureNormalCount;
+}
+
+const std::vector<std::string> TextureManager::GetTexturesColor() const
 {
 	// return the vector of texture names
-	return textures;
+	return texturesColor;
 }
 
-const UINT TextureManager::GetTextureID(const H2B::MATERIAL2& mat)
+const std::vector<std::string> TextureManager::GetTexturesNormal() const
+{
+	return texturesNormal;
+}
+
+const UINT TextureManager::GetTextureColorID(const H2B::MATERIAL2& mat)
 {
 	// index variable to return from the function
 	UINT index = -1;
 	if (!mat.map_Kd.empty())
 	{
 		// find the material in the map
-		auto iter = textureMap.find(mat.map_Kd);
+		auto iter = textureColorMap.find(mat.map_Kd);
 		// if the item was not found
-		if (iter == textureMap.end())
+		if (iter == textureColorMap.end())
 		{
 			// store the index
-			index = textures.size();
+			index = texturesColor.size();
 			// push into the container
-			textures.push_back(mat.map_Kd);
+			texturesColor.push_back(mat.map_Kd);
 			// insert into the map
-			textureMap[mat.map_Kd] = index;
+			textureColorMap[mat.map_Kd] = index;
 			// up the material count
-			texture_count++;
+			textureColorCount++;
 		}
 		// the material was found in the map
 		else
@@ -82,9 +95,47 @@ const UINT TextureManager::GetTextureID(const H2B::MATERIAL2& mat)
 	return index;
 }
 
-const std::string TextureManager::GetTexture(const UINT index) const
+const UINT TextureManager::GetTextureNormalID(const H2B::MATERIAL2& mat)
+{
+	// index variable to return from the function
+	UINT index = -1;
+	if (!mat.map_Ns.empty())
+	{
+		// find the material in the map
+		auto iter = textureNormalMap.find(mat.map_Ns);
+		// if the item was not found
+		if (iter == textureNormalMap.end())
+		{
+			// store the index
+			index = texturesNormal.size();
+			// push into the container
+			texturesNormal.push_back(mat.map_Ns);
+			// insert into the map
+			textureNormalMap[mat.map_Ns] = index;
+			// up the material count
+			textureNormalCount++;
+		}
+		// the material was found in the map
+		else
+		{
+			// set the variable to the iter's second
+			index = iter->second;
+		}
+	}
+	// return the index for the material
+	return index;
+}
+
+const std::string TextureManager::GetTextureColor(const UINT index) const
 {
 	std::string v = std::string();
-	v = (index < textures.size()) ? textures[index] : v;
+	v = (index < texturesColor.size()) ? texturesColor[index] : v;
+	return v;
+}
+
+const std::string TextureManager::GetTextureNormal(const UINT index) const
+{
+	std::string v = std::string();
+	v = (index < texturesNormal.size()) ? texturesNormal[index] : v;
 	return v;
 }

@@ -12,7 +12,8 @@
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
 #define D3D12_COMPTR_SAFE_RELEASE(ptr) { if(ptr) { ptr = nullptr; } }
-#define MAX_TEXTURES 1000
+#define MAX_COLOR_TEXTURES 500
+#define MAX_NORMAL_TEXTURES 500
 
 struct SCENE
 {
@@ -74,6 +75,8 @@ private:
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuse;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuseUpload;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceNormal;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceNormalUpload;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceSkybox;
 	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceSkyboxUpload;
@@ -233,6 +236,15 @@ VOID Renderer::ReleaseLevelResources()
 	textureResourceDiffuse.clear();
 	textureResourceDiffuseUpload.clear();
 
+	resourceSize = textureResourceNormal.size();
+	for (UINT i = 0; i < resourceSize; i++)
+	{
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceNormal[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceNormalUpload[i]);
+	}
+	textureResourceNormal.clear();
+	textureResourceNormalUpload.clear();
+
 	D3D12_COMPTR_SAFE_RELEASE(textureResourceSkybox);
 	D3D12_COMPTR_SAFE_RELEASE(textureResourceSkyboxUpload);
 
@@ -295,62 +307,82 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// constant buffer heap creation
-		CreateHeap(device, 5 + MAX_TEXTURES,
+		hr = CreateHeap(device, 5 + MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES,
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
 			D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 			cbvsrvuavHeap, cbvDescriptorSize);
+		if (FAILED(hr))
+		{
+			abort();
+		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		CD3DX12_HEAP_PROPERTIES prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 		CD3DX12_RESOURCE_DESC resource_desc = CD3DX12_RESOURCE_DESC();
 		////////////////////////////////////////////////////////////////////////////////////////////////////
-		CreateConstantBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 0, 
+		hr = CreateConstantBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 0, 
 			1, sizeof(SCENE), constantBufferScene, cbvSceneHandle);
+		if (FAILED(hr))
+		{
+			//abort();
+		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// materials
 		const UINT numAttributes = currentLevel.materials.GetMaterialCount();
-		CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 1,
+		hr = CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 1,
 			numAttributes, sizeof(H2B::ATTRIBUTES), structuredBufferAttributesResource, structuredBufferAttributeHandle);
+		if (FAILED(hr))
+		{
+			//abort();
+		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// instance data for matrices
 		const UINT numInstances = currentLevel.instanceData.size() + 1;
-		CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 2,
+		hr = CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 2,
 			numInstances, sizeof(GW::MATH::GMATRIXF), structuredBufferInstanceResource, structuredBufferInstanceHandle);
+		if (FAILED(hr))
+		{
+			//abort();
+		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// lighting information
 		const UINT numLights = currentLevel.uniqueLights.size();
-		CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 3,
+		hr = CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 3,
 			numLights, sizeof(H2B::LIGHT), structuredBufferLightResource, structuredBufferLightHandle);
+		if (FAILED(hr))
+		{
+			//abort();
+		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Texture Loading 
-		UINT numTextures = currentLevel.textures.GetTextureCount() + 1;
-		if(numTextures > 0)
-		{
-			// Reset the command allocator and the graphics command list
-			// we plan on entering commands to upload information to the gpu
-			allocator->Reset();
-			cmd->Reset(allocator, nullptr);
+		// Reset the command allocator and the graphics command list
+		// we plan on entering commands to upload information to the gpu
+		allocator->Reset();
+		cmd->Reset(allocator, nullptr);
 
+		UINT numTexturesColor = currentLevel.textures.GetTextureColorCount() + 1;
+		if(numTexturesColor > 0)
+		{
 			UINT heapOffset = 5;
 
-			textureResourceDiffuse.resize(numTextures);
-			textureResourceDiffuseUpload.resize(numTextures);
-			bool* IsCubeMap = new bool[numTextures];
-			memset(IsCubeMap, 1, sizeof(bool)* numTextures);
+			textureResourceDiffuse.resize(numTexturesColor);
+			textureResourceDiffuseUpload.resize(numTexturesColor);
+			bool* IsCubeMap = new bool[numTexturesColor];
+			memset(IsCubeMap, 1, sizeof(bool)* numTexturesColor);
 
 			Microsoft::WRL::ComPtr<ID3D12Device> d(device);
 			Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
 
-			std::vector<std::string> names = currentLevel.textures.GetTextures();
-			for (UINT i = 0; i < numTextures - 1; i++)
+			std::vector<std::string> names = currentLevel.textures.GetTexturesColor();
+			for (UINT i = 0; i < numTexturesColor - 1; i++)
 			{
 				std::string current_name = "../textures/" + names[i].substr(0, names[i].size() - 3) + "dds";
 				std::wstring wide_string(current_name.begin(), current_name.end());
@@ -380,7 +412,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				}
 			}
 
-			UINT lastEntry = numTextures - 1;
+			UINT lastEntry = numTexturesColor - 1;
 			hr = LoadTexture(d, c, textureResourceDiffuse[lastEntry], textureResourceDiffuseUpload[lastEntry], L"../textures/uvmapping.dds", IsCubeMap[lastEntry]);
 			if (SUCCEEDED(hr))
 			{
@@ -391,7 +423,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				ddsSrvDesc.ViewDimension = (IsCubeMap[lastEntry]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
 				ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
 
-				for (UINT i = lastEntry; i < MAX_TEXTURES; i++)
+				for (UINT i = lastEntry; i < MAX_COLOR_TEXTURES; i++)
 				{
 					CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset, cbvDescriptorSize);
 					device->CreateShaderResourceView(textureResourceDiffuse[lastEntry].Get(), &ddsSrvDesc, descHandle);
@@ -401,13 +433,39 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 
 			if (IsCubeMap)
 			{
-				delete[] IsCubeMap;
+				delete[] IsCubeMap; IsCubeMap = nullptr;
+			}
+		}
+
+		UINT numTexturesNormal = currentLevel.textures.GetTextureNormalCount() + 1;
+		if (numTexturesNormal > 0)
+		{
+			UINT heapOffset = 5 + MAX_COLOR_TEXTURES;
+
+			textureResourceNormal.resize(numTexturesNormal);
+			textureResourceNormalUpload.resize(numTexturesNormal);
+			bool* IsCubeMap = new bool[numTexturesNormal];
+			memset(IsCubeMap, 1, sizeof(bool) * numTexturesNormal);
+
+			Microsoft::WRL::ComPtr<ID3D12Device> d(device);
+			Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
+
+			std::vector<std::string> names = currentLevel.textures.GetTexturesNormal();
+			for (UINT i = 0; i < numTexturesNormal - 1; i++)
+			{
+				std::string current_name = "../textures/" + names[i].substr(0, names[i].size() - 3) + "dds";
+				std::wstring wide_string(current_name.begin(), current_name.end());
 			}
 
-			cmd->Close();
-			Microsoft::WRL::ComPtr<ID3D12CommandList> lists[] = { cmd };
-			queue->ExecuteCommandLists(ARRAYSIZE(lists), lists->GetAddressOf());
+			if (IsCubeMap)
+			{
+				delete[] IsCubeMap; IsCubeMap = nullptr;
+			}
 		}
+
+		cmd->Close();
+		Microsoft::WRL::ComPtr<ID3D12CommandList> lists[] = { cmd };
+		queue->ExecuteCommandLists(ARRAYSIZE(lists), lists->GetAddressOf());
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		
 
@@ -817,7 +875,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[8] = {};
-	rootParameters[0].InitAsConstants(4, 0, 0);					// num32bitConstants, register, space  (mesh_id)	b0, spaec0
+	rootParameters[0].InitAsConstants(6, 0, 0);					// num32bitConstants, register, space  (mesh_id)	b0, spaec0
 	rootParameters[1].InitAsConstantBufferView(1, 0);			// register, space	(view,projection)				b1, spaec0
 	rootParameters[2].InitAsShaderResourceView(0, 0);			// register, space	(OBJ_ATTRIBUTES)				t0, spaec0
 	rootParameters[3].InitAsShaderResourceView(1, 0);			// register, space	(instance matrix data)			t1, spaec0
@@ -976,8 +1034,13 @@ VOID Renderer::Render()
 	{
 		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 		{
-			// mesh_id, material_id, has_texture, texture_id			
-			UINT root32BitConstants[] = { mesh.second.meshIndex, submesh.materialIndex, submesh.hasColorTexture, submesh.colorTextureIndex };
+			// mesh_id, material_id, has_texture, texture_id
+			UINT root32BitConstants[] =
+			{
+				mesh.second.meshIndex, submesh.materialIndex,
+				submesh.hasColorTexture, submesh.hasNormalTexture,
+				submesh.colorTextureIndex, submesh.normalTextureIndex
+			};
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 		}
@@ -988,7 +1051,12 @@ VOID Renderer::Render()
 	{
 		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 		{
-			UINT root32BitConstants[] = { mesh.second.meshIndex, submesh.materialIndex, submesh.hasColorTexture, submesh.colorTextureIndex };
+			UINT root32BitConstants[] =
+			{
+				mesh.second.meshIndex, submesh.materialIndex,
+				submesh.hasColorTexture, submesh.hasNormalTexture,
+				submesh.colorTextureIndex, submesh.normalTextureIndex
+			};
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 		}

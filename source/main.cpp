@@ -13,6 +13,7 @@
 #include "Gateware.h"
 #include "renderer.h"
 #include "chronotimer.h"
+#include <DirectXColors.h>
 // open some namespaces to compact the code a bit
 using namespace GW;
 using namespace CORE;
@@ -28,13 +29,13 @@ int main()
 	if (+win.Create(0, 0, 1024, 768, GWindowStyle::WINDOWEDBORDERED))
 	{
 		win.SetWindowName("Dan Fernandez - Project - DirectX 12");
-		float clr[] = { 106/255.0f, 168/255.0f, 107/255.0f, 1 }; // start with a jade color
-		msgs.Create([&](const GW::GEvent& e) {
-			GW::SYSTEM::GWindow::Events q;
-			if (+e.Read(q) && q == GWindow::Events::RESIZE)
-				clr[0] += 0.01f; // move towards a orange as they resize
-		});
-		win.Register(msgs);
+		//float clr[] = { 106/255.0f, 168/255.0f, 107/255.0f, 1 }; // start with a jade color
+		//msgs.Create([&](const GW::GEvent& e) {
+		//	GW::SYSTEM::GWindow::Events q;
+		//	if (+e.Read(q) && q == GWindow::Events::RESIZE)
+		//		clr[0] += 0.01f; // move towards a orange as they resize
+		//});
+		//win.Register(msgs);
 		if (+d3d12.Create(win, GW::GRAPHICS::DEPTH_BUFFER_SUPPORT))
 		{
 			Renderer renderer(win, d3d12); // init
@@ -50,7 +51,7 @@ int main()
 						+d3d12.GetDepthStencilView((void**)&dsv))
 					{
 						timer.Signal();
-						cmd->ClearRenderTargetView(rtv, clr, 0, nullptr);
+						cmd->ClearRenderTargetView(rtv,	DirectX::Colors::DarkBlue, 0, nullptr);
 						cmd->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1, 0, 0, nullptr);
 
 						renderer.Update(timer.Delta());

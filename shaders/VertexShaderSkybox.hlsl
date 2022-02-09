@@ -17,8 +17,10 @@ struct MESH_DATA
 {
     uint mesh_id;
     uint material_id;
-    uint has_texture;
-    uint texture_id;
+    uint has_texture_c;
+    uint has_texture_n;
+    uint texture_c_id;
+    uint texture_n_id;
 };
 
 struct SCENE
