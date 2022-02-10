@@ -379,6 +379,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			textureResourceDiffuseUpload.resize(numTexturesColor);
 			bool* IsCubeMap = new bool[numTexturesColor];
 			memset(IsCubeMap, 1, sizeof(bool)* numTexturesColor);
+			bool CubeMapLoaded = false;
 
 			Microsoft::WRL::ComPtr<ID3D12Device> d(device);
 			Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
@@ -403,6 +404,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 						ddsSrvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
 						CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
 						device->CreateShaderResourceView(textureResourceDiffuse[i].Get(), &ddsSrvDesc, descHandle);
+						CubeMapLoaded = true;
 					}
 					else
 					{
@@ -415,7 +417,7 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			}
 
 			UINT lastEntry = numTexturesColor - 1;
-			hr = LoadTexture(d, c, textureResourceDiffuse[lastEntry], textureResourceDiffuseUpload[lastEntry], L"../textures/uvmapping.dds", IsCubeMap[lastEntry]);
+			hr = LoadTexture(d, c, textureResourceDiffuse[lastEntry], textureResourceDiffuseUpload[lastEntry], L"../textures/uvmapping_2d.dds", IsCubeMap[lastEntry]);
 			if (SUCCEEDED(hr))
 			{
 				D3D12_RESOURCE_DESC resourceDesc = textureResourceDiffuse[lastEntry]->GetDesc();
@@ -425,11 +427,27 @@ BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				ddsSrvDesc.ViewDimension = (IsCubeMap[lastEntry]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
 				ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
 
-				for (UINT i = lastEntry; i < MAX_COLOR_TEXTURES; i++)
+				for (UINT i = lastEntry; i < MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES; i++)
 				{
 					CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset, cbvDescriptorSize);
 					device->CreateShaderResourceView(textureResourceDiffuse[lastEntry].Get(), &ddsSrvDesc, descHandle);
 					heapOffset++;
+				}
+			}
+
+			if (!CubeMapLoaded)
+			{
+				hr = LoadTexture(d, c, textureResourceSkybox, textureResourceSkyboxUpload, L"../textures/uvmapping_3d.dds", IsCubeMap[lastEntry]);
+				if (SUCCEEDED(hr))
+				{
+					D3D12_RESOURCE_DESC resourceDesc = textureResourceSkybox->GetDesc();
+					D3D12_SHADER_RESOURCE_VIEW_DESC ddsSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC();
+					ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+					ddsSrvDesc.Format = resourceDesc.Format;
+					ddsSrvDesc.ViewDimension = (IsCubeMap[lastEntry]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+					ddsSrvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
+					CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
+					device->CreateShaderResourceView(textureResourceSkybox.Get(), &ddsSrvDesc, descHandle);
 				}
 			}
 
@@ -1030,12 +1048,20 @@ VOID Renderer::Render()
 		cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
 	}
 
-	CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
-	cmd->SetGraphicsRootDescriptorTable(5, cubemapSrvHandle);
+	if (currentLevel.textures.GetTextureColorCount() > 0)
+	{
+		CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
+		cmd->SetGraphicsRootDescriptorTable(5, cubemapSrvHandle);
 
-	CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5, cbvDescriptorSize);
-	cmd->SetGraphicsRootDescriptorTable(6, srvHandle);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE colorTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5, cbvDescriptorSize);
+		cmd->SetGraphicsRootDescriptorTable(6, colorTextureSrvHandle);
+	}
 
+	if (currentLevel.textures.GetTextureNormalCount() > 0)
+	{
+		CD3DX12_GPU_DESCRIPTOR_HANDLE normalTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5 + MAX_COLOR_TEXTURES, cbvDescriptorSize);
+		cmd->SetGraphicsRootDescriptorTable(7, normalTextureSrvHandle);
+	}
 
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
@@ -1060,6 +1086,7 @@ VOID Renderer::Render()
 		{
 			UINT root32BitConstants[] =
 			{
+				// mesh_id, material_id, has_texture, texture_id
 				mesh.second.meshIndex, submesh.materialIndex,
 				submesh.hasColorTexture, submesh.hasNormalTexture,
 				submesh.colorTextureIndex, submesh.normalTextureIndex

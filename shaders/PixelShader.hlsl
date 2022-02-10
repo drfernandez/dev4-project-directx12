@@ -39,10 +39,10 @@ SamplerState filter : register(s0, space0);
 float4 main(PS_IN input) : SV_TARGET
 {
     ATTRIBUTES material = AttributesData[MeshData.material_id];
-    float4 texture_color = color_texture[MeshData.texture_c_id].Sample(filter, input.uv);
 
     if (MeshData.has_texture_c)
     {
+        float4 texture_color = color_texture[MeshData.texture_c_id].Sample(filter, input.uv);
         material.Kd = texture_color.rgb;
         material.d = texture_color.a;
     }
