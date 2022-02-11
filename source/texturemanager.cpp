@@ -67,7 +67,7 @@ const std::vector<std::string> TextureManager::GetTexturesNormal() const
 const UINT TextureManager::GetTextureColorID(const H2B::MATERIAL2& mat)
 {
 	// index variable to return from the function
-	UINT index = -1;
+	UINT index = 0;
 	if (!mat.map_Kd.empty())
 	{
 		// find the material in the map
@@ -98,7 +98,7 @@ const UINT TextureManager::GetTextureColorID(const H2B::MATERIAL2& mat)
 const UINT TextureManager::GetTextureNormalID(const H2B::MATERIAL2& mat)
 {
 	// index variable to return from the function
-	UINT index = -1;
+	UINT index = 0;
 	if (!mat.map_Ns.empty())
 	{
 		// find the material in the map
