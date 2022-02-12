@@ -1,6 +1,5 @@
 #pragma once
 
-#include <commdlg.h>
 // minimalistic code to draw a single triangle, this is not part of the API.
 // required for compiling shaders on the fly, consider pre-compiling instead
 #include <d3dcompiler.h>
@@ -10,6 +9,7 @@
 #include <DDSTextureLoader.h>
 #include <locale> 
 #include <codecvt>
+#include <commdlg.h>
 
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
@@ -778,12 +778,19 @@ inline HRESULT Renderer::LoadLevelTextures(Microsoft::WRL::ComPtr<ID3D12Device> 
 		{
 			std::string current_name = "../textures/" + names[i].substr(0, names[i].size() - 3) + "dds";
 			std::wstring wide_string(current_name.begin(), current_name.end());
-		}
 
-		if (IsCubeMap)
-		{
-			delete[] IsCubeMap;
-			IsCubeMap = nullptr;
+			hr = LoadTexture(device, cmd, textureResourceNormal[i], textureResourceNormalUpload[i], wide_string, IsCubeMap[i]);
+			if (SUCCEEDED(hr))
+			{
+				D3D12_RESOURCE_DESC resourceDesc = textureResourceNormal[i]->GetDesc();
+				D3D12_SHADER_RESOURCE_VIEW_DESC ddsSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC();
+				ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+				ddsSrvDesc.Format = resourceDesc.Format;
+				ddsSrvDesc.ViewDimension = (IsCubeMap[i]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+				ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
+				CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset + i, cbvDescriptorSize);
+				device->CreateShaderResourceView(textureResourceNormal[i].Get(), &ddsSrvDesc, descHandle);
+			}
 		}
 	}
 
@@ -965,7 +972,6 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[0].Get());
 	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[0].Get());
 	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	psDesc.RasterizerState.CullMode = D3D12_CULL_MODE::D3D12_CULL_MODE_NONE;
 	psDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psDesc.SampleMask = UINT_MAX;

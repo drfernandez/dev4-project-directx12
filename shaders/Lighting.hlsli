@@ -112,3 +112,29 @@ float4 CalculateLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
     }
     return luminance;
 };
+
+float3x3 CotangentFrame(float3 normal, float3 view, float2 texcoord)
+{
+    // get edge vectors of the pixel triangle
+    float3 dp1 = ddx(view);
+    float3 dp2 = ddy(view);
+    float2 duv1 = ddx(texcoord);
+    float2 duv2 = ddy(texcoord);
+
+    // solve the linear system
+    float3 dp1perp = cross(normal, dp1);
+    float3 dp2perp = cross(dp2, normal);
+    float3 T = normalize(dp2perp * duv1.x + dp1perp * duv2.x);
+    float3 B = normalize(dp2perp * duv1.y + dp1perp * duv2.y);
+
+    // construct a scale-invariant frame
+    float invmax = rsqrt(max(dot(T, T), dot(B, B)));
+    return float3x3(T * invmax, B * invmax, normal);
+}
+
+float3 PerturbNormal(float3 normal, float3 view, float2 texcoord, float3 lookup)
+{
+    lookup.y = -lookup.y;
+    float3x3 TBN = CotangentFrame(normal, -view, texcoord);
+    return normalize(mul(TBN, lookup));
+}

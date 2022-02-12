@@ -48,6 +48,14 @@ float4 main(PS_IN input) : SV_TARGET
     }
     
     SURFACE surface = { input.wpos.xyz, normalize(input.nrm) };
+
+    if(MeshData.has_texture_n)
+    {
+        float3 normal_color = normal_texture[MeshData.texture_n_id].Sample(filter, input.uv).xyz;
+        float3 viewDirection = normalize(SceneData.cameraPosition.xyz - input.wpos);
+        normal_color = normal_color * 2.0f - 1.0f;
+        surface.normal = PerturbNormal(surface.normal, viewDirection, input.uv, normal_color);
+    }
     
     float4 luminance = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 specular = float4(0.0f, 0.0f, 0.0f, 0.0f);
