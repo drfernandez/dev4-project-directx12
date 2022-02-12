@@ -965,6 +965,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[0].Get());
 	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[0].Get());
 	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	psDesc.RasterizerState.CullMode = D3D12_CULL_MODE::D3D12_CULL_MODE_NONE;
 	psDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psDesc.SampleMask = UINT_MAX;

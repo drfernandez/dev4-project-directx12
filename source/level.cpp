@@ -46,6 +46,7 @@ BOOL Level::LoadLevel(const std::string& filepath)
 		for (const auto& matrix : mesh.second.matrices)
 		{
 			meshID++;
+			instanceData.push_back(matrix);
 		}
 	}
 	for (auto& skybox : uniqueSkyboxes)
@@ -54,13 +55,6 @@ BOOL Level::LoadLevel(const std::string& filepath)
 		for (const auto& matrix : skybox.second.matrices)
 		{
 			meshID++;
-		}
-	}
-	for (const auto& m : uniqueMeshes)
-	{
-		for (const auto& matrix : m.second.matrices)
-		{
-			instanceData.push_back(matrix);
 		}
 	}
 
