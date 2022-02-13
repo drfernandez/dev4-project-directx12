@@ -12,8 +12,10 @@ struct MESH_DATA
     uint material_id;
     uint has_texture_c;
     uint has_texture_n;
+    uint has_texture_s;
     uint texture_c_id;
     uint texture_n_id;
+    uint texture_s_id;
 };
 
 struct SCENE
@@ -32,6 +34,7 @@ StructuredBuffer<LIGHT> LightData : register(t2, space0);
 TextureCube skybox : register(t3, space0);
 Texture2D color_texture[] : register(t0, space1);
 Texture2D normal_texture[] : register(t0, space2);
+Texture2D specular_texture[] : register(t0, space3);
 SamplerState filter : register(s0, space0);
 
 float4 main(PS_IN input) : SV_TARGET

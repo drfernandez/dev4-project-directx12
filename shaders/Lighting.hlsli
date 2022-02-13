@@ -65,7 +65,7 @@ float4 CalculateSpecular(ATTRIBUTES mat, LIGHT light, SURFACE surface, float3 ca
     float3 toLight = normalize(light.position.xyz - surface.position.xyz);
     float attenuation = 1.0f;
     float specPower = mat.Ns;
-    
+    [branch]
     switch (int(light.position.w))
     {
         case 0:
@@ -96,6 +96,7 @@ float4 CalculateSpecular(ATTRIBUTES mat, LIGHT light, SURFACE surface, float3 ca
 float4 CalculateLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
 {
     float4 luminance = float4(0, 0, 0, 0);
+    [branch]
     switch (int(light.position.w))
     {
         case 0: // directional light
@@ -122,19 +123,18 @@ float3x3 CotangentFrame(float3 normal, float3 view, float2 texcoord)
     float2 duv2 = ddy(texcoord);
 
     // solve the linear system
-    float3 dp1perp = cross(normal, dp1);
     float3 dp2perp = cross(dp2, normal);
-    float3 T = normalize(dp2perp * duv1.x + dp1perp * duv2.x);
-    float3 B = normalize(dp2perp * duv1.y + dp1perp * duv2.y);
+    float3 dp1perp = cross(normal, dp1);
+    float3 T = (dp2perp * duv1.x + dp1perp * duv2.x);
+    float3 B = (dp2perp * duv1.y + dp1perp * duv2.y);
 
     // construct a scale-invariant frame
     float invmax = rsqrt(max(dot(T, T), dot(B, B)));
-    return float3x3(T * invmax, B * invmax, normal);
+    return transpose(float3x3(T * invmax, B * invmax, normal));
 }
 
 float3 PerturbNormal(float3 normal, float3 view, float2 texcoord, float3 lookup)
 {
-    lookup.y = -lookup.y;
     float3x3 TBN = CotangentFrame(normal, -view, texcoord);
     return normalize(mul(TBN, lookup));
 }

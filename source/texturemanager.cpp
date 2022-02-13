@@ -157,7 +157,7 @@ const UINT TextureManager::GetTextureSpecularID(const H2B::MATERIAL2& mat)
 		if (iter == textureSpecularMap.end())
 		{
 			// store the index
-			index = texturesNormal.size();
+			index = texturesSpecular.size();
 			// push into the container
 			texturesSpecular.push_back(mat.map_Ns);
 			// insert into the map

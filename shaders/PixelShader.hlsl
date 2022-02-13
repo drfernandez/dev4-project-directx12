@@ -14,8 +14,10 @@ struct MESH_DATA
     uint material_id;
     uint has_texture_c;
     uint has_texture_n;
+    uint has_texture_s;
     uint texture_c_id;
     uint texture_n_id;
+    uint texture_s_id;
 };
 
 struct SCENE
@@ -34,11 +36,15 @@ StructuredBuffer<LIGHT> LightData : register(t2, space0);
 TextureCube skybox : register(t3, space1);
 Texture2D color_texture[] : register(t0, space1);
 Texture2D normal_texture[] : register(t0, space2);
+Texture2D specular_texture[] : register(t0, space3);
 SamplerState filter : register(s0, space0);
 
 float4 main(PS_IN input) : SV_TARGET
 {
     ATTRIBUTES material = AttributesData[MeshData.material_id];
+    SURFACE surface = { input.wpos.xyz, normalize(input.nrm) };
+    float HasSpecular = 1.0f;
+
 
     if (MeshData.has_texture_c)
     {
@@ -46,15 +52,18 @@ float4 main(PS_IN input) : SV_TARGET
         material.Kd = texture_color.rgb;
         material.d = texture_color.a;
     }
-    
-    SURFACE surface = { input.wpos.xyz, normalize(input.nrm) };
 
     if(MeshData.has_texture_n)
     {
         float3 normal_color = normal_texture[MeshData.texture_n_id].Sample(filter, input.uv).xyz;
         float3 viewDirection = normalize(SceneData.cameraPosition.xyz - input.wpos);
-        normal_color = normal_color * 2.0f - 1.0f;
+        normal_color = normalize(normal_color * 2.0f - 1.0f);
         surface.normal = PerturbNormal(surface.normal, viewDirection, input.uv, normal_color);
+    }
+
+    if (MeshData.has_texture_s)
+    {
+        HasSpecular = specular_texture[MeshData.texture_s_id].Sample(filter, input.uv).x;
     }
     
     float4 luminance = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -65,11 +74,11 @@ float4 main(PS_IN input) : SV_TARGET
     {
         LIGHT light = LightData[i];
         luminance += CalculateLight(material, light, surface);
-        specular += CalculateSpecular(material, light, surface, SceneData.cameraPosition.xyz);
+        specular += CalculateSpecular(material, light, surface, SceneData.cameraPosition.xyz) * HasSpecular;
     }
     
     float4 diffuse = float4(material.Kd, material.d);
-    float4 ambient = float4(material.Ka, 0.0f);
+    float4 ambient = float4(material.Ka, 0.0f) * 0.25f;
     float4 emissive = float4(material.Ke, 0.0f);
     float4 result = float4(luminance.xyz + ambient.xyz, 1.0f);
     

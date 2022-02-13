@@ -35,8 +35,10 @@ namespace H2B
 		unsigned int materialIndex;
 		unsigned int hasColorTexture;
 		unsigned int hasNormalTexture;
+		unsigned int hasSpecularTexture;
 		unsigned int colorTextureIndex;
 		unsigned int normalTextureIndex;
+		unsigned int specularTextureIndex;
 
 		MESH2()
 		{
@@ -45,8 +47,10 @@ namespace H2B
 			materialIndex = 0;
 			hasColorTexture = 0;
 			hasNormalTexture = 0;
+			hasSpecularTexture = 0;
 			colorTextureIndex = 0;
 			normalTextureIndex = 0;
+			specularTextureIndex = 0;
 		}
 		MESH2(const MESH& m)
 		{
@@ -55,8 +59,10 @@ namespace H2B
 			materialIndex = m.materialIndex;
 			hasColorTexture = 0;
 			hasNormalTexture = 0;
+			hasSpecularTexture = 0;
 			colorTextureIndex = 0;
 			normalTextureIndex = 0;
+			specularTextureIndex = 0;
 		}
 	};
 	struct MATERIAL2

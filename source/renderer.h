@@ -14,8 +14,10 @@
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
 #define D3D12_COMPTR_SAFE_RELEASE(ptr) { if(ptr) { ptr = nullptr; } }
-#define MAX_COLOR_TEXTURES 500
-#define MAX_NORMAL_TEXTURES 500
+#define MAX_TEXTURE_COUNT 500
+#define MAX_COLOR_TEXTURES MAX_TEXTURE_COUNT
+#define MAX_NORMAL_TEXTURES MAX_TEXTURE_COUNT
+#define MAX_SPECULAR_TEXTURES MAX_TEXTURE_COUNT
 
 struct SCENE
 {
@@ -79,6 +81,8 @@ private:
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuseUpload;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceNormal;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceNormalUpload;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceSpecular;
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceSpecularUpload;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceDefault2D;
 	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceDefault2DUpload;
@@ -251,6 +255,15 @@ inline VOID Renderer::ReleaseLevelResources()
 	textureResourceNormal.clear();
 	textureResourceNormalUpload.clear();
 
+	resourceSize = textureResourceSpecular.size();
+	for (UINT i = 0; i < resourceSize; i++)
+	{
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceSpecular[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceSpecularUpload[i]);
+	}
+	textureResourceSpecular.clear();
+	textureResourceSpecularUpload.clear();
+
 	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault2D);
 	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault2DUpload);
 	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault3D);
@@ -315,7 +328,7 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// constant buffer heap creation
-		hr = CreateHeap(device, 5 + MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES,
+		hr = CreateHeap(device, 5 + MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES + MAX_SPECULAR_TEXTURES,
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
 			D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 			cbvsrvuavHeap, cbvDescriptorSize);
@@ -770,9 +783,6 @@ inline HRESULT Renderer::LoadLevelTextures(Microsoft::WRL::ComPtr<ID3D12Device> 
 		bool* IsCubeMap = new bool[numTexturesNormal];
 		memset(IsCubeMap, 1, sizeof(bool) * numTexturesNormal);
 
-		Microsoft::WRL::ComPtr<ID3D12Device> d(device);
-		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
-
 		std::vector<std::string> names = currentLevel.textures.GetTexturesNormal();
 		for (UINT i = 0; i < numTexturesNormal; i++)
 		{
@@ -791,6 +801,48 @@ inline HRESULT Renderer::LoadLevelTextures(Microsoft::WRL::ComPtr<ID3D12Device> 
 				CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset + i, cbvDescriptorSize);
 				device->CreateShaderResourceView(textureResourceNormal[i].Get(), &ddsSrvDesc, descHandle);
 			}
+		}
+		if (IsCubeMap)
+		{
+			delete[] IsCubeMap;
+			IsCubeMap = nullptr;
+		}
+	}
+
+	UINT numTexturesSpecular = currentLevel.textures.GetTextureSpecularCount();
+	if (numTexturesSpecular > 0)
+	{
+		UINT heapOffset = 5 + MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES;
+
+		textureResourceSpecular.resize(numTexturesSpecular);
+		textureResourceSpecularUpload.resize(numTexturesSpecular);
+		bool* IsCubeMap = new bool[numTexturesSpecular];
+		memset(IsCubeMap, 1, sizeof(bool) * numTexturesSpecular);
+
+		std::vector<std::string> names = currentLevel.textures.GetTexturesSpecular();
+		for (UINT i = 0; i < numTexturesSpecular; i++)
+		{
+			std::string current_name = "../textures/" + names[i].substr(0, names[i].size() - 3) + "dds";
+			std::wstring wide_string(current_name.begin(), current_name.end());
+
+			hr = LoadTexture(device, cmd, textureResourceSpecular[i], textureResourceSpecularUpload[i], wide_string, IsCubeMap[i]);
+			if (SUCCEEDED(hr))
+			{
+				D3D12_RESOURCE_DESC resourceDesc = textureResourceSpecular[i]->GetDesc();
+				D3D12_SHADER_RESOURCE_VIEW_DESC ddsSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC();
+				ddsSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+				ddsSrvDesc.Format = resourceDesc.Format;
+				ddsSrvDesc.ViewDimension = (IsCubeMap[i]) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+				ddsSrvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
+				CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), heapOffset + i, cbvDescriptorSize);
+				device->CreateShaderResourceView(textureResourceSpecular[i].Get(), &ddsSrvDesc, descHandle);
+			}
+		}
+
+		if (IsCubeMap)
+		{
+			delete[] IsCubeMap;
+			IsCubeMap = nullptr;
 		}
 	}
 
@@ -920,13 +972,14 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		{ "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
-	CD3DX12_DESCRIPTOR_RANGE1 ranges[3] = {};
+	CD3DX12_DESCRIPTOR_RANGE1 ranges[4] = {};
 	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+	ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 3, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
-	CD3DX12_ROOT_PARAMETER1 rootParameters[8] = {};
-	rootParameters[0].InitAsConstants(6, 0, 0);					// num32bitConstants, register, space  (mesh_id)	b0, spaec0
+	CD3DX12_ROOT_PARAMETER1 rootParameters[9] = {};
+	rootParameters[0].InitAsConstants(8, 0, 0);					// num32bitConstants, register, space  (mesh_id)	b0, spaec0
 	rootParameters[1].InitAsConstantBufferView(1, 0);			// register, space	(view,projection)				b1, spaec0
 	rootParameters[2].InitAsShaderResourceView(0, 0);			// register, space	(OBJ_ATTRIBUTES)				t0, spaec0
 	rootParameters[3].InitAsShaderResourceView(1, 0);			// register, space	(instance matrix data)			t1, spaec0
@@ -934,6 +987,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	rootParameters[5].InitAsDescriptorTable(1, &ranges[0]);		// count, table(s) (skybox texture)					t3, space0
 	rootParameters[6].InitAsDescriptorTable(1, &ranges[1]);		// count, table(s) (color textures)					t0, space1
 	rootParameters[7].InitAsDescriptorTable(1, &ranges[2]);		// count, table(s) (normal textures)				t0, space2
+	rootParameters[8].InitAsDescriptorTable(1, &ranges[3]);		// count, table(s) (specular textures)				t0, space3
 
 	// static samplers
 	CD3DX12_STATIC_SAMPLER_DESC sampler = CD3DX12_STATIC_SAMPLER_DESC(
@@ -1089,16 +1143,21 @@ VOID Renderer::Render()
 		cmd->SetGraphicsRootDescriptorTable(7, normalTextureSrvHandle);
 	}
 
+	if (currentLevel.textures.GetTextureSpecularCount() > 0)
+	{
+		CD3DX12_GPU_DESCRIPTOR_HANDLE specularTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5 + MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES, cbvDescriptorSize);
+		cmd->SetGraphicsRootDescriptorTable(8, specularTextureSrvHandle);
+	}
+
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
 		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 		{
-			// mesh_id, material_id, has_texture, texture_id
 			UINT root32BitConstants[] =
 			{
 				mesh.second.meshIndex, submesh.materialIndex,
-				submesh.hasColorTexture, submesh.hasNormalTexture,
-				submesh.colorTextureIndex, submesh.normalTextureIndex
+				submesh.hasColorTexture, submesh.hasNormalTexture, submesh.hasSpecularTexture,
+				submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
 			};
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
@@ -1112,10 +1171,9 @@ VOID Renderer::Render()
 		{
 			UINT root32BitConstants[] =
 			{
-				// mesh_id, material_id, has_texture, texture_id
 				mesh.second.meshIndex, submesh.materialIndex,
-				submesh.hasColorTexture, submesh.hasNormalTexture,
-				submesh.colorTextureIndex, submesh.normalTextureIndex
+				submesh.hasColorTexture, submesh.hasNormalTexture, submesh.hasSpecularTexture,
+				submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
 			};
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);

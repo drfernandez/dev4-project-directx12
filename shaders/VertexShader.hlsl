@@ -9,7 +9,7 @@ struct VS_IN
 
 struct VS_OUT
 {
-    float4 pos : SV_Position;
+    float4 pos : SV_POSITION;
     float2 uv : TEXCOORD;
     float3 nrm : NORMAL;
     float3 wpos : WORLDPOS;
@@ -21,8 +21,10 @@ struct MESH_DATA
     uint material_id;
     uint has_texture_c;
     uint has_texture_n;
+    uint has_texture_s;
     uint texture_c_id;
     uint texture_n_id;
+    uint texture_s_id;
 };
 
 struct SCENE
@@ -42,7 +44,7 @@ VS_OUT main(VS_IN input, uint id : SV_InstanceID)
 {    
     float4 p = float4(input.pos, 1.0f);
     float2 u = input.uvw.xy;
-    float3 n = normalize(input.nrm);
+    float3 n = input.nrm;
     float3 wp = float3(0, 0, 0);
     matrix w = InstanceData[MeshData.mesh_id + id];
     
