@@ -188,9 +188,18 @@ BOOL Level::LoadH2B(const std::string& h2bFilePath, H2B::INSTANCED_MESH& instanc
 			m.colorTextureIndex = textures.GetTextureColorID(mat);
 			m.normalTextureIndex = textures.GetTextureNormalID(mat);
 			m.specularTextureIndex = textures.GetTextureSpecularID(mat);
-			m.hasColorTexture = !mat.map_Kd.empty();
-			m.hasNormalTexture = !mat.bump.empty();
-			m.hasSpecularTexture = !mat.map_Ns.empty();
+			if (!mat.map_Kd.empty())
+			{
+				m.hasTexture |= COLOR_FLAG;
+			}
+			if (!mat.bump.empty())
+			{
+				m.hasTexture |= NORMAL_FLAG;
+			}
+			if (!mat.map_Ns.empty())
+			{
+				m.hasTexture |= SPECULAR_FLAG;
+			}
 			instancedMesh.subMeshes.push_back(m);
 		}
 

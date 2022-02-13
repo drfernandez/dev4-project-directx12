@@ -11,6 +11,9 @@ class Level
 {
 private:
 	std::ifstream input;
+	const UINT COLOR_FLAG = 0x00000001u;
+	const UINT NORMAL_FLAG = 0x00000002u;
+	const UINT SPECULAR_FLAG = 0x00000004u;
 
 	BOOL FileExists(std::string file);
 	std::string GetFileName(std::string file);

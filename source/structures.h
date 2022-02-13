@@ -33,9 +33,7 @@ namespace H2B
 		std::string name;
 		BATCH drawInfo;
 		unsigned int materialIndex;
-		unsigned int hasColorTexture;
-		unsigned int hasNormalTexture;
-		unsigned int hasSpecularTexture;
+		unsigned int hasTexture;
 		unsigned int colorTextureIndex;
 		unsigned int normalTextureIndex;
 		unsigned int specularTextureIndex;
@@ -45,9 +43,7 @@ namespace H2B
 			name = "";
 			drawInfo = { };
 			materialIndex = 0;
-			hasColorTexture = 0;
-			hasNormalTexture = 0;
-			hasSpecularTexture = 0;
+			hasTexture = 0;
 			colorTextureIndex = 0;
 			normalTextureIndex = 0;
 			specularTextureIndex = 0;
@@ -57,9 +53,7 @@ namespace H2B
 			name = (m.name != NULL) ? std::string(m.name) : "";
 			drawInfo = m.drawInfo;
 			materialIndex = m.materialIndex;
-			hasColorTexture = 0;
-			hasNormalTexture = 0;
-			hasSpecularTexture = 0;
+			hasTexture = 0;
 			colorTextureIndex = 0;
 			normalTextureIndex = 0;
 			specularTextureIndex = 0;

@@ -1,4 +1,8 @@
 
+static const uint COLOR_FLAG = 0x00000001u;
+static const uint NORMAL_FLAG = 0x00000002u;
+static const uint SPECULAR_FLAG = 0x00000004u;
+
 struct SURFACE
 {
     float3 position;

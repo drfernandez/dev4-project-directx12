@@ -12,9 +12,7 @@ struct MESH_DATA
 {
     uint mesh_id;
     uint material_id;
-    uint has_texture_c;
-    uint has_texture_n;
-    uint has_texture_s;
+    uint has_texture;
     uint texture_c_id;
     uint texture_n_id;
     uint texture_s_id;
@@ -46,14 +44,14 @@ float4 main(PS_IN input) : SV_TARGET
     float HasSpecular = 1.0f;
 
 
-    if (MeshData.has_texture_c)
+    if (MeshData.has_texture & COLOR_FLAG)
     {
         float4 texture_color = color_texture[MeshData.texture_c_id].Sample(filter, input.uv);
         material.Kd = texture_color.rgb;
         material.d = texture_color.a;
     }
 
-    if(MeshData.has_texture_n)
+    if(MeshData.has_texture & NORMAL_FLAG)
     {
         float3 normal_color = normal_texture[MeshData.texture_n_id].Sample(filter, input.uv).xyz;
         float3 viewDirection = normalize(SceneData.cameraPosition.xyz - input.wpos);
@@ -61,7 +59,7 @@ float4 main(PS_IN input) : SV_TARGET
         surface.normal = PerturbNormal(surface.normal, viewDirection, input.uv, normal_color);
     }
 
-    if (MeshData.has_texture_s)
+    if (MeshData.has_texture & SPECULAR_FLAG)
     {
         HasSpecular = specular_texture[MeshData.texture_s_id].Sample(filter, input.uv).x;
     }
