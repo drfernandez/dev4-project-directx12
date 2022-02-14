@@ -1149,6 +1149,7 @@ VOID Renderer::Render()
 		cmd->SetGraphicsRootDescriptorTable(8, specularTextureSrvHandle);
 	}
 
+	const UINT turnOff = 0x00000000u;
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
 		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
@@ -1156,7 +1157,7 @@ VOID Renderer::Render()
 			UINT root32BitConstants[] =
 			{
 				mesh.second.meshIndex, submesh.materialIndex,
-				submesh.hasTexture,
+				submesh.hasTexture & ~turnOff,
 				submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
 			};
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
