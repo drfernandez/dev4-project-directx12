@@ -43,7 +43,6 @@ float4 main(PS_IN input) : SV_TARGET
     SURFACE surface = { input.wpos.xyz, normalize(input.nrm) };
     float HasSpecular = 1.0f;
 
-
     if (MeshData.has_texture & COLOR_FLAG)
     {
         float4 texture_color = color_texture[MeshData.texture_c_id].Sample(filter, input.uv);
@@ -51,7 +50,7 @@ float4 main(PS_IN input) : SV_TARGET
         material.d = texture_color.a;
     }
 
-    if(MeshData.has_texture & NORMAL_FLAG)
+    if (MeshData.has_texture & NORMAL_FLAG)
     {
         float3 normal_color = normal_texture[MeshData.texture_n_id].Sample(filter, input.uv).xyz;
         float3 viewDirection = normalize(SceneData.cameraPosition.xyz - input.wpos);

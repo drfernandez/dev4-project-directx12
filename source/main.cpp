@@ -36,7 +36,7 @@ int main()
 		//		clr[0] += 0.01f; // move towards a orange as they resize
 		//});
 		//win.Register(msgs);
-		if (+d3d12.Create(win, GW::GRAPHICS::DEPTH_BUFFER_SUPPORT))
+		if (+d3d12.Create(win, GW::GRAPHICS::DEPTH_BUFFER_SUPPORT | COLOR_10_BIT))
 		{
 			Renderer renderer(win, d3d12); // init
 			while (+win.ProcessWindowEvents())

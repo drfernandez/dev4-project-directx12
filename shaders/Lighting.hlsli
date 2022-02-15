@@ -134,6 +134,7 @@ float3x3 CotangentFrame(float3 normal, float3 view, float2 texcoord)
 
     // construct a scale-invariant frame
     float invmax = rsqrt(max(dot(T, T), dot(B, B)));
+    // returns a column-major matrix
     return transpose(float3x3(T * invmax, B * invmax, normal));
 }
 

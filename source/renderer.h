@@ -59,23 +59,22 @@ private:
 
 	UINT														cbvDescriptorSize;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				cbvsrvuavHeap;
-	UINT														cbvsrvuabIndex;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						constantBufferScene;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								cbvSceneHandle;
-	SCENE* constantBufferSceneData;
+	SCENE*														constantBufferSceneData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferAttributesResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferAttributeHandle;
-	H2B::ATTRIBUTES* structuredBufferAttributesData;
+	H2B::ATTRIBUTES*											structuredBufferAttributesData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferInstanceResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferInstanceHandle;
-	GW::MATH::GMATRIXF* structuredBufferInstanceData;
+	GW::MATH::GMATRIXF*											structuredBufferInstanceData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferLightResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferLightHandle;
-	H2B::LIGHT* structuredBufferLightData;
+	H2B::LIGHT*													structuredBufferLightData;
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuse;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuseUpload;
@@ -83,6 +82,7 @@ private:
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceNormalUpload;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceSpecular;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceSpecularUpload;
+	UINT														textureBitMask;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceDefault2D;
 	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceDefault2DUpload;
@@ -90,6 +90,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource>						textureResourceDefault3DUpload;
 
 	Level														currentLevel;
+
 
 	UINT CalculateConstantBufferByteSize(UINT byteSize);
 	std::string ShaderAsString(const CHAR* shaderFilePath);
@@ -183,6 +184,8 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 	bool aim_left_right_changed = controllerState[G_RX_AXIS];
 	GW::GReturn result = kbmProxy.GetMouseDelta(mouse_x_delta, mouse_y_delta);
 	bool mouse_moved = G_PASS(result) && result != GW::GReturn::REDUNDANT && mouse_r_button_pressed;
+	bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
+	bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
 
 	if (!mouse_moved)
 	{
@@ -217,6 +220,14 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 		worldCamera.row4 = { 0.0f, 0.0f, 0.0f, 1.0f };
 		matrixProxy.MultiplyMatrixF(worldCamera, y_rotation, worldCamera);
 		worldCamera.row4 = position;
+	}
+	if (textureOn)
+	{
+		textureBitMask = 0x00000000u;
+	}
+	if (textureOff)
+	{
+		textureBitMask = 0x00000006u;
 	}
 
 	// end of camera update
@@ -292,6 +303,7 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 	}
 
 	worldCamera = currentLevel.camera;
+	textureBitMask = 0x00000000u;
 
 	HRESULT hr = E_NOTIMPL;
 	{
@@ -642,7 +654,7 @@ inline HRESULT Renderer::LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device
 
 	std::unique_ptr<uint8_t[]> ddsData;
 	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
-	DirectX::DDS_ALPHA_MODE alphaMode;
+	DirectX::DDS_ALPHA_MODE alphaMode = DirectX::DDS_ALPHA_MODE::DDS_ALPHA_MODE_UNKNOWN;
 	hr = DirectX::LoadDDSTextureFromFile(device.Get(), filepath.c_str(), resource.ReleaseAndGetAddressOf(),
 		ddsData, subresources, 0Ui64, &alphaMode, &IsCubeMap);
 	if (FAILED(hr))
@@ -712,7 +724,7 @@ inline HRESULT Renderer::LoadDefaultTextures(Microsoft::WRL::ComPtr<ID3D12Device
 		ddsSrvDesc.Format = resourceDesc.Format;
 		ddsSrvDesc.ViewDimension = (IsCubeMap) ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
 		ddsSrvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
-		for (size_t i = 0; i < MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES; i++)
+		for (size_t i = 0; i < MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES + MAX_SPECULAR_TEXTURES; i++)
 		{
 			CD3DX12_CPU_DESCRIPTOR_HANDLE descHandle(cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart(), colorOffset + i, cbvDescriptorSize);
 			device->CreateShaderResourceView(textureResourceDefault2D.Get(), &ddsSrvDesc, descHandle);
@@ -853,7 +865,6 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 {
 	dialogBoxOpen = false;
 	fenceValues = 0;
-	cbvsrvuabIndex = 0;
 
 	win = _win;
 	d3d = _d3d;
@@ -1127,29 +1138,31 @@ VOID Renderer::Render()
 		D3D12_GPU_VIRTUAL_ADDRESS srvLightHandle = structuredBufferLightResource->GetGPUVirtualAddress();// +0U * sizeof(H2B::LIGHT);
 		cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
 	}
+	const UINT cubeMapOffset = 4;
+	const UINT colorTexturesOffset = 5;
+	const UINT normalTexturesOffset = colorTexturesOffset + MAX_COLOR_TEXTURES;
+	const UINT specularTexturesOffset = normalTexturesOffset + MAX_NORMAL_TEXTURES;
 
 	if (currentLevel.textures.GetTextureColorCount() > 0)
 	{
-		CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 4, cbvDescriptorSize);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), cubeMapOffset, cbvDescriptorSize);
 		cmd->SetGraphicsRootDescriptorTable(5, cubemapSrvHandle);
-
-		CD3DX12_GPU_DESCRIPTOR_HANDLE colorTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5, cbvDescriptorSize);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE colorTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), colorTexturesOffset, cbvDescriptorSize);
 		cmd->SetGraphicsRootDescriptorTable(6, colorTextureSrvHandle);
 	}
 
 	if (currentLevel.textures.GetTextureNormalCount() > 0)
 	{
-		CD3DX12_GPU_DESCRIPTOR_HANDLE normalTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5 + MAX_COLOR_TEXTURES, cbvDescriptorSize);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE normalTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), normalTexturesOffset, cbvDescriptorSize);
 		cmd->SetGraphicsRootDescriptorTable(7, normalTextureSrvHandle);
 	}
 
 	if (currentLevel.textures.GetTextureSpecularCount() > 0)
 	{
-		CD3DX12_GPU_DESCRIPTOR_HANDLE specularTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), 5 + MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES, cbvDescriptorSize);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE specularTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), specularTexturesOffset, cbvDescriptorSize);
 		cmd->SetGraphicsRootDescriptorTable(8, specularTextureSrvHandle);
 	}
 
-	const UINT turnOff = 0x00000000u;
 	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
 	{
 		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
@@ -1157,7 +1170,7 @@ VOID Renderer::Render()
 			UINT root32BitConstants[] =
 			{
 				mesh.second.meshIndex, submesh.materialIndex,
-				submesh.hasTexture & ~turnOff,
+				submesh.hasTexture & ~textureBitMask,
 				submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
 			};
 			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
