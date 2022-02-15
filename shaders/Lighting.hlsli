@@ -132,14 +132,12 @@ float3x3 CotangentFrame(float3 normal, float3 view, float2 texcoord)
     float3 T = (dp2perp * duv1.x + dp1perp * duv2.x);
     float3 B = (dp2perp * duv1.y + dp1perp * duv2.y);
 
-    // construct a scale-invariant frame
     float invmax = rsqrt(max(dot(T, T), dot(B, B)));
-    // returns a column-major matrix
-    return transpose(float3x3(T * invmax, B * invmax, normal));
+    return float3x3(T * invmax, B * invmax, normal);
 }
 
 float3 PerturbNormal(float3 normal, float3 view, float2 texcoord, float3 lookup)
 {
     float3x3 TBN = CotangentFrame(normal, -view, texcoord);
-    return normalize(mul(TBN, lookup));
+    return normalize(mul(lookup, TBN));
 }
