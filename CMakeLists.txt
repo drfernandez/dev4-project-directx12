@@ -37,6 +37,20 @@ if(WIN32)
 		shaders/pixelshader.hlsl
 		shaders/pixelshaderskybox.hlsl
 	)
+	set(IMGUI
+		imgui/imconfig.h
+		imgui/imgui_demo.cpp
+		imgui/imgui_draw.cpp
+		imgui/imgui_internal.h
+		imgui/imgui_tables.cpp
+		imgui/imgui_widgets.cpp
+		imgui/imgui.h
+		imgui/imgui.cpp
+		imgui/imgui_impl_dx12.h
+		imgui/imgui_impl_dx12.cpp
+		imgui/imgui_impl_win32.h
+		imgui/imgui_impl_win32.cpp
+	)
 
 	# Add any new C/C++ source code here
 	add_executable (Project_DX12 
@@ -44,6 +58,7 @@ if(WIN32)
 		${SOURCE}
 		${VERTEX_SHADERS}
 		${PIXEL_SHADERS}
+		${IMGUI}
 	)
 
 	# This code will tell visual studio to convert above shader .hlsl to .h files
@@ -79,4 +94,5 @@ if(WIN32)
 	#set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${VERTEX_SHADERS})
 	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${PIXEL_SHADERS})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${IMGUI})
 endif(WIN32)

@@ -14,6 +14,7 @@
 #include "renderer.h"
 #include "chronotimer.h"
 #include <DirectXColors.h>
+
 // open some namespaces to compact the code a bit
 using namespace GW;
 using namespace CORE;
@@ -36,7 +37,7 @@ int main()
 		//		clr[0] += 0.01f; // move towards a orange as they resize
 		//});
 		//win.Register(msgs);
-		if (+d3d12.Create(win, GW::GRAPHICS::DEPTH_BUFFER_SUPPORT | COLOR_10_BIT))
+		if (+d3d12.Create(win, GW::GRAPHICS::DEPTH_BUFFER_SUPPORT))
 		{
 			Renderer renderer(win, d3d12); // init
 			while (+win.ProcessWindowEvents())

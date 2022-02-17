@@ -2,6 +2,7 @@
 static const uint COLOR_FLAG = 0x00000001u;
 static const uint NORMAL_FLAG = 0x00000002u;
 static const uint SPECULAR_FLAG = 0x00000004u;
+static const float PI = 3.14159f;
 
 struct SURFACE
 {
@@ -140,4 +141,29 @@ float3 PerturbNormal(float3 normal, float3 view, float2 texcoord, float3 lookup)
 {
     float3x3 TBN = CotangentFrame(normal, -view, texcoord);
     return normalize(mul(lookup, TBN));
+}
+
+float D_GGX(float NoH, float a)
+{
+    float a2 = a * a;
+    float f = (NoH * a2 - NoH) * NoH + 1.0;
+    return a2 / (PI * f * f);
+}
+
+float3 F_Schlick(float u, float3 f0)
+{
+    return f0 + (float3(1.0, 1.0f, 1.0f) - f0) * pow(1.0 - u, 5.0);
+}
+
+float V_SmithGGXCorrelated(float NoV, float NoL, float a)
+{
+    float a2 = a * a;
+    float GGXL = NoV * sqrt((-NoL * a2 + NoL) * NoL + a2);
+    float GGXV = NoL * sqrt((-NoV * a2 + NoV) * NoV + a2);
+    return 0.5 / (GGXV + GGXL);
+}
+
+float Fd_Lambert()
+{
+    return 1.0 / PI;
 }

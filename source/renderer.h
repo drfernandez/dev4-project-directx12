@@ -10,6 +10,9 @@
 #include <locale> 
 #include <codecvt>
 #include <commdlg.h>
+#include "../imgui/imgui.h"
+#include "../imgui/imgui_impl_dx12.h"
+#include "../imgui/imgui_impl_win32.h"
 
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
@@ -25,6 +28,10 @@ struct SCENE
 	GW::MATH::GMATRIXF projection;
 	GW::MATH::GVECTORF cameraPosition;
 };
+
+// Forward declare message handler from imgui_impl_win32.cpp
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 
 // Creation, Rendering & Cleanup
 class Renderer
@@ -91,7 +98,11 @@ private:
 
 	Level														currentLevel;
 
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				imguiSrvDescHeap;
+	static LONG_PTR												imguiWndProcHandle;
 
+
+	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	UINT CalculateConstantBufferByteSize(UINT byteSize);
 	std::string ShaderAsString(const CHAR* shaderFilePath);
 
@@ -130,6 +141,15 @@ public:
 	VOID Update(FLOAT deltaTime);
 
 };
+
+LONG_PTR Renderer::imguiWndProcHandle = 0;
+
+inline LRESULT Renderer::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
+
+	return CallWindowProcW((WNDPROC)imguiWndProcHandle, hWnd, msg, wParam, lParam);
+}
 
 inline UINT Renderer::CalculateConstantBufferByteSize(UINT byteSize)
 {
@@ -184,8 +204,6 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 	bool aim_left_right_changed = controllerState[G_RX_AXIS];
 	GW::GReturn result = kbmProxy.GetMouseDelta(mouse_x_delta, mouse_y_delta);
 	bool mouse_moved = G_PASS(result) && result != GW::GReturn::REDUNDANT && mouse_r_button_pressed;
-	bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
-	bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
 
 	if (!mouse_moved)
 	{
@@ -221,6 +239,16 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 		matrixProxy.MultiplyMatrixF(worldCamera, y_rotation, worldCamera);
 		worldCamera.row4 = position;
 	}
+
+	// end of camera update
+	matrixProxy.InverseF(worldCamera, viewMatrix);
+	matrixProxy.ProjectionDirectXLHF(G2D_DEGREE_TO_RADIAN(65),
+		aspect_ratio, 0.1f, 1000.0f,
+		projectionMatrix);
+
+
+	bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
+	bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
 	if (textureOn)
 	{
 		textureBitMask = 0x00000000u;
@@ -229,12 +257,6 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 	{
 		textureBitMask = 0x00000006u;
 	}
-
-	// end of camera update
-	matrixProxy.InverseF(worldCamera, viewMatrix);
-	matrixProxy.ProjectionDirectXLHF(G2D_DEGREE_TO_RADIAN(65),
-		aspect_ratio, 0.1f, 1000.0f,
-		projectionMatrix);
 }
 
 inline VOID Renderer::ReleaseLevelResources()
@@ -752,7 +774,14 @@ inline HRESULT Renderer::LoadLevelTextures(Microsoft::WRL::ComPtr<ID3D12Device> 
 		for (UINT i = 0; i < numTexturesColor; i++)
 		{
 			std::string current_name = "../textures/" + names[i].substr(0, names[i].size() - 3) + "dds";
-			std::wstring wide_string(current_name.begin(), current_name.end());
+			//std::wstring wide_string(current_name.begin(), current_name.end());
+
+			//setup converter
+			using convert_type = std::codecvt_utf8<wchar_t>;
+			std::wstring_convert<convert_type, wchar_t> converter;
+			//use converter (.to_bytes: wstr->str, .from_bytes: str->wstr)
+			std::wstring wide_string = converter.from_bytes(current_name);
+			//fileName = std::string(ws.begin(), ws.end());
 
 			hr = LoadTexture(device, cmd, textureResourceDiffuse[i], textureResourceDiffuseUpload[i], wide_string, IsCubeMap[i]);
 			if (SUCCEEDED(hr))
@@ -879,6 +908,9 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE uwh;
 	+win.GetWindowHandle(uwh);
 
+	//internal_gw::GInputGlobal()._userWinProc = SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)GWinProc);
+	imguiWndProcHandle = SetWindowLongPtr((HWND)uwh.window, GWLP_WNDPROC, (LONG_PTR)WndProc);
+
 	ReleaseLevelResources();
 
 	+eventResponder.Create([=](const GW::GEvent& e)
@@ -906,7 +938,6 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 			}
 		});
 	+bufferedInput.Register(eventResponder);
-
 
 	HRESULT hr = E_NOTIMPL;
 
@@ -1060,12 +1091,38 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	{
 		abort();
 	}
+
+
+	UINT descSize = 0;
+	hr = CreateHeap(device, 1, 
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		imguiSrvDescHeap, descSize);
+
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	// Setup Dear ImGui style
+	ImGui::StyleColorsDark();
+	// Setup Platform/Renderer backends
+	bool success = false;
+	success = ImGui_ImplWin32_Init(uwh.window);
+	success = ImGui_ImplDX12_Init(device, 2,
+		DXGI_FORMAT_R8G8B8A8_UNORM, imguiSrvDescHeap.Get(),
+		imguiSrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
+		imguiSrvDescHeap->GetGPUDescriptorHandleForHeapStart());
+
 	// free temporary handle
 	device->Release();
 }
 
 Renderer::~Renderer()
 {
+	// Cleanup
+	ImGui_ImplDX12_Shutdown();
+	ImGui_ImplWin32_Shutdown();
+	ImGui::DestroyContext();
+
 	// ComPtr will auto release so nothing to do here 
 	if (constantBufferScene)
 	{
@@ -1193,6 +1250,22 @@ VOID Renderer::Render()
 			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 		}
 	}
+
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> imguiHeaps[] = { this->imguiSrvDescHeap.Get() };
+	cmd->SetDescriptorHeaps(_countof(imguiHeaps), imguiHeaps->GetAddressOf());
+
+	// Start the Dear ImGui frame
+	ImGui_ImplDX12_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+	bool showWindow = true;
+	ImGui::ShowDemoWindow(&showWindow);
+
+	// Rendering
+	ImGui::Render();
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+
 	// release temp handles
 	cmd->Release();
 }
