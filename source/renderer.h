@@ -99,7 +99,7 @@ private:
 	Level														currentLevel;
 
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				imguiSrvDescHeap;
-	static LONG_PTR												imguiWndProcHandle;
+	static LONG_PTR												gatewareWndProc;
 
 
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -142,13 +142,13 @@ public:
 
 };
 
-LONG_PTR Renderer::imguiWndProcHandle = 0;
+LONG_PTR Renderer::gatewareWndProc = 0;
 
 inline LRESULT Renderer::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
 
-	return CallWindowProcW((WNDPROC)imguiWndProcHandle, hWnd, msg, wParam, lParam);
+	return CallWindowProcW((WNDPROC)gatewareWndProc, hWnd, msg, wParam, lParam);
 }
 
 inline UINT Renderer::CalculateConstantBufferByteSize(UINT byteSize)
@@ -909,7 +909,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	+win.GetWindowHandle(uwh);
 
 	//internal_gw::GInputGlobal()._userWinProc = SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)GWinProc);
-	imguiWndProcHandle = SetWindowLongPtr((HWND)uwh.window, GWLP_WNDPROC, (LONG_PTR)WndProc);
+	gatewareWndProc = SetWindowLongPtr((HWND)uwh.window, GWLP_WNDPROC, (LONG_PTR)WndProc);
 
 	ReleaseLevelResources();
 
