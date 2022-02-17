@@ -69,19 +69,19 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						constantBufferScene;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								cbvSceneHandle;
-	SCENE*														constantBufferSceneData;
+	SCENE* constantBufferSceneData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferAttributesResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferAttributeHandle;
-	H2B::ATTRIBUTES*											structuredBufferAttributesData;
+	H2B::ATTRIBUTES* structuredBufferAttributesData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferInstanceResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferInstanceHandle;
-	GW::MATH::GMATRIXF*											structuredBufferInstanceData;
+	GW::MATH::GMATRIXF* structuredBufferInstanceData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferLightResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferLightHandle;
-	H2B::LIGHT*													structuredBufferLightData;
+	H2B::LIGHT* structuredBufferLightData;
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuse;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuseUpload;
@@ -101,8 +101,10 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				imguiSrvDescHeap;
 	static LONG_PTR												gatewareWndProc;
 
-
+	// used by Dear ImGui
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	VOID DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmd);
+
 	UINT CalculateConstantBufferByteSize(UINT byteSize);
 	std::string ShaderAsString(const CHAR* shaderFilePath);
 
@@ -149,6 +151,39 @@ inline LRESULT Renderer::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 	ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
 
 	return CallWindowProcW((WNDPROC)gatewareWndProc, hWnd, msg, wParam, lParam);
+}
+
+inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmd)
+{	
+	// Start the Dear ImGui frame
+	ImGui_ImplDX12_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+
+	GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE uwh;
+	win.GetWindowHandle(uwh);
+
+
+	IM_ASSERT(ImGui::GetCurrentContext() != NULL && "Missing dear imgui context. Refer to examples app!");
+	static bool showMainMenu = true;
+	ImGui::ShowDemoWindow(&showMainMenu);
+	//const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+	//ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 10, main_viewport->WorkPos.y + 10), ImGuiCond_FirstUseEver);
+	//ImGui::SetNextWindowSize(ImVec2(50, 50), ImGuiCond_FirstUseEver);
+
+	//ImGuiWindowFlags window_flags = 0;
+
+	//ImGui::Begin("DirectX 12 Project", &showMainMenu, window_flags);
+	//{
+	//	
+	//}
+	//ImGui::End();
+
+
+	// Rendering
+	ImGui::Render();
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd.Get());
+	ImGui::EndFrame();
 }
 
 inline UINT Renderer::CalculateConstantBufferByteSize(UINT byteSize)
@@ -1094,7 +1129,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 
 	UINT descSize = 0;
-	hr = CreateHeap(device, 1, 
+	hr = CreateHeap(device, 1,
 		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		imguiSrvDescHeap, descSize);
 
@@ -1151,9 +1186,6 @@ Renderer::~Renderer()
 
 VOID Renderer::Render()
 {
-	if (!vertexView.BufferLocation || !indexView.BufferLocation)
-		return;
-
 	// grab the context & render target
 	ID3D12GraphicsCommandList1* cmd;
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv;
@@ -1161,110 +1193,104 @@ VOID Renderer::Render()
 	d3d.GetCommandList((void**)&cmd);
 	d3d.GetCurrentRenderTargetView((void**)&rtv);
 	d3d.GetDepthStencilView((void**)&dsv);
-
 	// setup the pipeline
 	cmd->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
 	cmd->SetGraphicsRootSignature(rootSignature.Get());
 	cmd->SetPipelineState(pipeline.Get());
 
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ppHeaps[] = { cbvsrvuavHeap.Get() };
-	cmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps->GetAddressOf());
+	// if the currentlevel is loaded then process the level information
+	if (vertexView.BufferLocation && indexView.BufferLocation)
+	{
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ppHeaps[] = { cbvsrvuavHeap.Get() };
+		cmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps->GetAddressOf());
 
-	// now we can draw
-	cmd->IASetVertexBuffers(0, 1, &vertexView);
-	cmd->IASetIndexBuffer(&indexView);
-	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		// now we can draw
+		cmd->IASetVertexBuffers(0, 1, &vertexView);
+		cmd->IASetIndexBuffer(&indexView);
+		cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	if (constantBufferScene)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress();// +0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
-		cmd->SetGraphicsRootConstantBufferView(1, cbvHandle);
-	}
-	if (structuredBufferAttributesResource)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS srvAttributesHandle = structuredBufferAttributesResource->GetGPUVirtualAddress();// +0U * (sizeof(H2B::ATTRIBUTES));
-		cmd->SetGraphicsRootShaderResourceView(2, srvAttributesHandle);
-	}
-	if (structuredBufferInstanceResource)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS srvInstanceHandle = structuredBufferInstanceResource->GetGPUVirtualAddress();// +0U * sizeof(GW::MATH::GMATRIXF);
-		cmd->SetGraphicsRootShaderResourceView(3, srvInstanceHandle);
-	}
-	if (structuredBufferLightResource)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS srvLightHandle = structuredBufferLightResource->GetGPUVirtualAddress();// +0U * sizeof(H2B::LIGHT);
-		cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
-	}
-	const UINT cubeMapOffset = 4;
-	const UINT colorTexturesOffset = 5;
-	const UINT normalTexturesOffset = colorTexturesOffset + MAX_COLOR_TEXTURES;
-	const UINT specularTexturesOffset = normalTexturesOffset + MAX_NORMAL_TEXTURES;
-
-	if (currentLevel.textures.GetTextureColorCount() > 0)
-	{
-		CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), cubeMapOffset, cbvDescriptorSize);
-		cmd->SetGraphicsRootDescriptorTable(5, cubemapSrvHandle);
-		CD3DX12_GPU_DESCRIPTOR_HANDLE colorTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), colorTexturesOffset, cbvDescriptorSize);
-		cmd->SetGraphicsRootDescriptorTable(6, colorTextureSrvHandle);
-	}
-
-	if (currentLevel.textures.GetTextureNormalCount() > 0)
-	{
-		CD3DX12_GPU_DESCRIPTOR_HANDLE normalTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), normalTexturesOffset, cbvDescriptorSize);
-		cmd->SetGraphicsRootDescriptorTable(7, normalTextureSrvHandle);
-	}
-
-	if (currentLevel.textures.GetTextureSpecularCount() > 0)
-	{
-		CD3DX12_GPU_DESCRIPTOR_HANDLE specularTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), specularTexturesOffset, cbvDescriptorSize);
-		cmd->SetGraphicsRootDescriptorTable(8, specularTextureSrvHandle);
-	}
-
-	for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
-	{
-		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
+		if (constantBufferScene)
 		{
-			UINT root32BitConstants[] =
+			D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress();// +0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
+			cmd->SetGraphicsRootConstantBufferView(1, cbvHandle);
+		}
+		if (structuredBufferAttributesResource)
+		{
+			D3D12_GPU_VIRTUAL_ADDRESS srvAttributesHandle = structuredBufferAttributesResource->GetGPUVirtualAddress();// +0U * (sizeof(H2B::ATTRIBUTES));
+			cmd->SetGraphicsRootShaderResourceView(2, srvAttributesHandle);
+		}
+		if (structuredBufferInstanceResource)
+		{
+			D3D12_GPU_VIRTUAL_ADDRESS srvInstanceHandle = structuredBufferInstanceResource->GetGPUVirtualAddress();// +0U * sizeof(GW::MATH::GMATRIXF);
+			cmd->SetGraphicsRootShaderResourceView(3, srvInstanceHandle);
+		}
+		if (structuredBufferLightResource)
+		{
+			D3D12_GPU_VIRTUAL_ADDRESS srvLightHandle = structuredBufferLightResource->GetGPUVirtualAddress();// +0U * sizeof(H2B::LIGHT);
+			cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
+		}
+		const UINT cubeMapOffset = 4;
+		const UINT colorTexturesOffset = 5;
+		const UINT normalTexturesOffset = colorTexturesOffset + MAX_COLOR_TEXTURES;
+		const UINT specularTexturesOffset = normalTexturesOffset + MAX_NORMAL_TEXTURES;
+
+		if (currentLevel.textures.GetTextureColorCount() > 0)
+		{
+			CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), cubeMapOffset, cbvDescriptorSize);
+			cmd->SetGraphicsRootDescriptorTable(5, cubemapSrvHandle);
+			CD3DX12_GPU_DESCRIPTOR_HANDLE colorTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), colorTexturesOffset, cbvDescriptorSize);
+			cmd->SetGraphicsRootDescriptorTable(6, colorTextureSrvHandle);
+		}
+
+		if (currentLevel.textures.GetTextureNormalCount() > 0)
+		{
+			CD3DX12_GPU_DESCRIPTOR_HANDLE normalTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), normalTexturesOffset, cbvDescriptorSize);
+			cmd->SetGraphicsRootDescriptorTable(7, normalTextureSrvHandle);
+		}
+
+		if (currentLevel.textures.GetTextureSpecularCount() > 0)
+		{
+			CD3DX12_GPU_DESCRIPTOR_HANDLE specularTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), specularTexturesOffset, cbvDescriptorSize);
+			cmd->SetGraphicsRootDescriptorTable(8, specularTextureSrvHandle);
+		}
+
+		for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
+		{
+			for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 			{
-				mesh.second.meshIndex, submesh.materialIndex,
-				submesh.hasTexture & ~textureBitMask,
-				submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
-			};
-			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
-			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
+				UINT root32BitConstants[] =
+				{
+					mesh.second.meshIndex, submesh.materialIndex,
+					submesh.hasTexture & ~textureBitMask,
+					submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
+				};
+				cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
+				cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
+			}
+		}
+
+		cmd->SetPipelineState(pipelineSkybox.Get());
+		for (const auto& mesh : currentLevel.uniqueSkyboxes)	// skybox count
+		{
+			for (const auto& submesh : mesh.second.subMeshes)	// submesh count
+			{
+				UINT root32BitConstants[] =
+				{
+					mesh.second.meshIndex, submesh.materialIndex,
+					submesh.hasTexture,
+					submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
+				};
+				cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
+				cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
+			}
 		}
 	}
 
-	cmd->SetPipelineState(pipelineSkybox.Get());
-	for (const auto& mesh : currentLevel.uniqueSkyboxes)	// skybox count
-	{
-		for (const auto& submesh : mesh.second.subMeshes)	// submesh count
-		{
-			UINT root32BitConstants[] =
-			{
-				mesh.second.meshIndex, submesh.materialIndex,
-				submesh.hasTexture,
-				submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
-			};
-			cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
-			cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
-		}
-	}
-
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> imguiHeaps[] = { this->imguiSrvDescHeap.Get() };
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> imguiHeaps[] = { imguiSrvDescHeap.Get() };
 	cmd->SetDescriptorHeaps(_countof(imguiHeaps), imguiHeaps->GetAddressOf());
 
-	// Start the Dear ImGui frame
-	ImGui_ImplDX12_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-	bool showWindow = true;
-	ImGui::ShowDemoWindow(&showWindow);
-
-	// Rendering
-	ImGui::Render();
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), cmd);
-
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> c(cmd);
+	DisplayImguiMenu(c);
 
 	// release temp handles
 	cmd->Release();

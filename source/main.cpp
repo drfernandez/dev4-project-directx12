@@ -27,7 +27,7 @@ int main()
 	GWindow win;
 	GEventResponder msgs;
 	GDirectX12Surface d3d12;
-	if (+win.Create(0, 0, 1024, 768, GWindowStyle::WINDOWEDBORDERED))
+	if (+win.Create(0, 0, 1280, 800, GWindowStyle::WINDOWEDBORDERED))
 	{
 		win.SetWindowName("Dan Fernandez - Project - DirectX 12");
 		//float clr[] = { 106/255.0f, 168/255.0f, 107/255.0f, 1 }; // start with a jade color
