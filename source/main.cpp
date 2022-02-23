@@ -42,20 +42,20 @@ int main()
 			Renderer renderer(win, d3d12); // init
 			while (+win.ProcessWindowEvents())
 			{
+				timer.Signal();
+				renderer.Update(timer.Delta());
 				if (+d3d12.StartFrame())
 				{
-					ID3D12GraphicsCommandList* cmd;
-					D3D12_CPU_DESCRIPTOR_HANDLE rtv;
-					D3D12_CPU_DESCRIPTOR_HANDLE dsv;
+					ID3D12GraphicsCommandList* cmd = nullptr;
+					D3D12_CPU_DESCRIPTOR_HANDLE rtv = {};
+					D3D12_CPU_DESCRIPTOR_HANDLE dsv = {};
 					if (+d3d12.GetCommandList((void**)&cmd) && 
 						+d3d12.GetCurrentRenderTargetView((void**)&rtv) &&
 						+d3d12.GetDepthStencilView((void**)&dsv))
 					{
-						timer.Signal();
 						cmd->ClearRenderTargetView(rtv,	DirectX::Colors::DarkBlue, 0, nullptr);
 						cmd->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1, 0, 0, nullptr);
 
-						renderer.Update(timer.Delta());
 						renderer.Render(); // draw
 
 						d3d12.EndFrame(true);

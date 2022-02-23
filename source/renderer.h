@@ -13,6 +13,7 @@
 #include "../imgui/imgui.h"
 #include "../imgui/imgui_impl_dx12.h"
 #include "../imgui/imgui_impl_win32.h"
+#include <algorithm>
 
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
@@ -166,19 +167,55 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 
 	IM_ASSERT(ImGui::GetCurrentContext() != NULL && "Missing dear imgui context. Refer to examples app!");
 	static bool showMainMenu = true;
-	ImGui::ShowDemoWindow(&showMainMenu);
-	//const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-	//ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 10, main_viewport->WorkPos.y + 10), ImGuiCond_FirstUseEver);
-	//ImGui::SetNextWindowSize(ImVec2(50, 50), ImGuiCond_FirstUseEver);
+	//ImGui::ShowDemoWindow(&showMainMenu);
+	const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(ImVec2(main_viewport->WorkPos.x + 10, main_viewport->WorkPos.y + 10), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(50, 50), ImGuiCond_FirstUseEver);
+	ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
 
-	//ImGuiWindowFlags window_flags = 0;
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar;
 
-	//ImGui::Begin("DirectX 12 Project", &showMainMenu, window_flags);
-	//{
-	//	
-	//}
-	//ImGui::End();
-
+	if (ImGui::BeginMainMenuBar())
+	{
+		if (ImGui::BeginMenu("File"))
+		{
+			//ImGui::MenuItem("(demo menu)", NULL, false, false);
+			if (ImGui::MenuItem("New")) {}
+			if (ImGui::MenuItem("Open", "Ctrl+O")) {}
+			if (ImGui::BeginMenu("Open Recent"))
+			{
+				ImGui::MenuItem("fish_hat.c");
+				ImGui::MenuItem("fish_hat.inl");
+				ImGui::MenuItem("fish_hat.h");
+				if (ImGui::BeginMenu("More.."))
+				{
+					ImGui::MenuItem("Hello");
+					ImGui::MenuItem("Sailor");
+					if (ImGui::BeginMenu("Recurse.."))
+					{
+						//ShowExampleMenuFile();
+						ImGui::EndMenu();
+					}
+					ImGui::EndMenu();
+				}
+				ImGui::EndMenu();
+			}
+			if (ImGui::MenuItem("Save", "Ctrl+S")) {}
+			if (ImGui::MenuItem("Save As..")) {}
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu("Edit"))
+		{
+			if (ImGui::MenuItem("Undo", "CTRL+Z")) {}
+			if (ImGui::MenuItem("Redo", "CTRL+Y", false, false)) {}  // Disabled item
+			ImGui::Separator();
+			if (ImGui::MenuItem("Cut", "CTRL+X")) {}
+			if (ImGui::MenuItem("Copy", "CTRL+C")) {}
+			if (ImGui::MenuItem("Paste", "CTRL+V")) {}
+			ImGui::EndMenu();
+		}
+		ImGui::EndMainMenuBar();
+	}
 
 	// Rendering
 	ImGui::Render();
@@ -950,7 +987,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	+eventResponder.Create([=](const GW::GEvent& e)
 		{
-			bool IsFocusWindow = GetFocus() == (HWND&)uwh;
+			bool IsFocusWindow = (GetFocus() == (HWND&)uwh);
 			if (!IsFocusWindow)
 			{
 				return;
@@ -1050,7 +1087,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	};
 
 	CD3DX12_DESCRIPTOR_RANGE1 ranges[4] = {};
-	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV,  1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 3, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
@@ -1067,16 +1104,19 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	rootParameters[8].InitAsDescriptorTable(1, &ranges[3]);		// count, table(s) (specular textures)				t0, space3
 
 	// static samplers
-	CD3DX12_STATIC_SAMPLER_DESC sampler = CD3DX12_STATIC_SAMPLER_DESC(
-		0,
-		D3D12_FILTER_ANISOTROPIC,
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		0.0f, 16U,
-		D3D12_COMPARISON_FUNC_LESS_EQUAL,
-		D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
-		0.0f, 3.402823466e+38F,
-		D3D12_SHADER_VISIBILITY_PIXEL,
-		0);
+	CD3DX12_STATIC_SAMPLER_DESC sampler = 
+		CD3DX12_STATIC_SAMPLER_DESC(
+			0,
+			D3D12_FILTER_ANISOTROPIC,
+			D3D12_TEXTURE_ADDRESS_MODE_WRAP, 
+			D3D12_TEXTURE_ADDRESS_MODE_WRAP, 
+			D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			0.0f, 16U,
+			D3D12_COMPARISON_FUNC_LESS_EQUAL,
+			D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+			0.0f, 3.402823466e+38F,
+			D3D12_SHADER_VISIBILITY_PIXEL,
+			0);
 
 	// create root signature
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc(
