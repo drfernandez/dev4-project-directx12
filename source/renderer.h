@@ -33,7 +33,6 @@ struct SCENE
 // Forward declare message handler from imgui_impl_win32.cpp
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-
 // Creation, Rendering & Cleanup
 class Renderer
 {
@@ -48,7 +47,7 @@ private:
 	GW::INPUT::GController										controllerProxy;
 	GW::INPUT::GBufferedInput									bufferedInput;
 	GW::CORE::GEventResponder									eventResponder;
-	bool														dialogBoxOpen;
+	BOOL														dialogBoxOpen;
 
 	GW::MATH::GMatrix											matrixProxy;
 	GW::MATH::GMATRIXF											identityMatrix;
@@ -155,7 +154,7 @@ inline LRESULT Renderer::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 }
 
 inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmd)
-{	
+{
 	// Start the Dear ImGui frame
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
@@ -179,39 +178,20 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 	{
 		if (ImGui::BeginMenu("File"))
 		{
-			//ImGui::MenuItem("(demo menu)", NULL, false, false);
-			if (ImGui::MenuItem("New")) {}
-			if (ImGui::MenuItem("Open", "Ctrl+O")) {}
-			if (ImGui::BeginMenu("Open Recent"))
-			{
-				ImGui::MenuItem("fish_hat.c");
-				ImGui::MenuItem("fish_hat.inl");
-				ImGui::MenuItem("fish_hat.h");
-				if (ImGui::BeginMenu("More.."))
-				{
-					ImGui::MenuItem("Hello");
-					ImGui::MenuItem("Sailor");
-					if (ImGui::BeginMenu("Recurse.."))
-					{
-						//ShowExampleMenuFile();
-						ImGui::EndMenu();
-					}
-					ImGui::EndMenu();
-				}
-				ImGui::EndMenu();
-			}
-			if (ImGui::MenuItem("Save", "Ctrl+S")) {}
-			if (ImGui::MenuItem("Save As..")) {}
+			if (ImGui::MenuItem("New", "", false, false)) {}
+			if (ImGui::MenuItem("Open", "CTRL+O")) { dialogBoxOpen = TRUE; }
+			if (ImGui::MenuItem("Save", "CTRL+S", false, false)) {}
+			if (ImGui::MenuItem("Save As..", "", false, false)) {}
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu("Edit"))
 		{
-			if (ImGui::MenuItem("Undo", "CTRL+Z")) {}
+			if (ImGui::MenuItem("Undo", "CTRL+Z", false, false)) {}
 			if (ImGui::MenuItem("Redo", "CTRL+Y", false, false)) {}  // Disabled item
 			ImGui::Separator();
-			if (ImGui::MenuItem("Cut", "CTRL+X")) {}
-			if (ImGui::MenuItem("Copy", "CTRL+C")) {}
-			if (ImGui::MenuItem("Paste", "CTRL+V")) {}
+			if (ImGui::MenuItem("Cut", "CTRL+X", false, false)) {}
+			if (ImGui::MenuItem("Copy", "CTRL+C", false, false)) {}
+			if (ImGui::MenuItem("Paste", "CTRL+V", false, false)) {}
 			ImGui::EndMenu();
 		}
 		ImGui::EndMainMenuBar();
@@ -318,14 +298,13 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 		aspect_ratio, 0.1f, 1000.0f,
 		projectionMatrix);
 
-
 	bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
 	bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
 	if (textureOn)
 	{
 		textureBitMask = 0x00000000u;
 	}
-	if (textureOff)
+	else if (textureOff)
 	{
 		textureBitMask = 0x00000006u;
 	}
@@ -964,7 +943,7 @@ inline HRESULT Renderer::LoadLevelTextures(Microsoft::WRL::ComPtr<ID3D12Device> 
 
 Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3d)
 {
-	dialogBoxOpen = false;
+	dialogBoxOpen = FALSE;
 	fenceValues = 0;
 
 	win = _win;
@@ -988,17 +967,9 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	+eventResponder.Create([=](const GW::GEvent& e)
 		{
 			bool IsFocusWindow = (GetFocus() == (HWND&)uwh);
-			if (!IsFocusWindow)
+			if (!IsFocusWindow)	return;
+			if (dialogBoxOpen)
 			{
-				return;
-			}
-			GW::INPUT::GBufferedInput::Events q;
-			GW::INPUT::GBufferedInput::EVENT_DATA qd;
-			bool bReadIsGood = +e.Read(q, qd);
-			bool bBufferedInputKey1 = (q == GW::INPUT::GBufferedInput::Events::KEYRELEASED && qd.data == G_KEY_1);
-			if (bReadIsGood && bBufferedInputKey1 && !dialogBoxOpen)
-			{
-				dialogBoxOpen = true;
 				std::string levelName = std::string();
 				if (OpenFileDialogBox(uwh, levelName))
 				{
@@ -1006,7 +977,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 					ReleaseLevelResources();
 					LoadLevelDataFromFile(levelName);
 				}
-				dialogBoxOpen = false;
+				dialogBoxOpen = FALSE;
 			}
 		});
 	+bufferedInput.Register(eventResponder);
@@ -1087,7 +1058,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	};
 
 	CD3DX12_DESCRIPTOR_RANGE1 ranges[4] = {};
-	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV,  1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 3, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
@@ -1104,12 +1075,12 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	rootParameters[8].InitAsDescriptorTable(1, &ranges[3]);		// count, table(s) (specular textures)				t0, space3
 
 	// static samplers
-	CD3DX12_STATIC_SAMPLER_DESC sampler = 
+	CD3DX12_STATIC_SAMPLER_DESC sampler =
 		CD3DX12_STATIC_SAMPLER_DESC(
 			0,
 			D3D12_FILTER_ANISOTROPIC,
-			D3D12_TEXTURE_ADDRESS_MODE_WRAP, 
-			D3D12_TEXTURE_ADDRESS_MODE_WRAP, 
+			D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 			D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 			0.0f, 16U,
 			D3D12_COMPARISON_FUNC_LESS_EQUAL,
