@@ -637,11 +637,11 @@ inline HRESULT Renderer::CreateHeap(Microsoft::WRL::ComPtr<ID3D12Device> device,
 	HRESULT hr = E_NOTIMPL;
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 	// heap creation
-	D3D12_DESCRIPTOR_HEAP_DESC cbvsrvuavHeapDesc = {};
-	cbvsrvuavHeapDesc.NumDescriptors = numDescriptors;
-	cbvsrvuavHeapDesc.Type = type;
-	cbvsrvuavHeapDesc.Flags = flags;
-	hr = device->CreateDescriptorHeap(&cbvsrvuavHeapDesc, IID_PPV_ARGS(resource.ReleaseAndGetAddressOf()));
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+	heapDesc.NumDescriptors = numDescriptors;
+	heapDesc.Type = type;
+	heapDesc.Flags = flags;
+	hr = device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(resource.ReleaseAndGetAddressOf()));
 
 	descriptorSize = device->GetDescriptorHandleIncrementSize(type);
 	////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1021,12 +1021,15 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> psBlob;
 	std::vector<Microsoft::WRL::ComPtr<ID3DBlob>> psErrors;
 
-	vsBlob.resize(ARRAYSIZE(vertexShaders));
-	vsErrors.resize(ARRAYSIZE(vertexShaders));
-	psBlob.resize(ARRAYSIZE(pixelShaders));
-	psErrors.resize(ARRAYSIZE(pixelShaders));
+	UINT vertexShaderSize = ARRAYSIZE(vertexShaders);
+	UINT pixelShaderSize = ARRAYSIZE(pixelShaders);
 
-	for (UINT i = 0; i < ARRAYSIZE(vertexShaders); i++)
+	vsBlob.resize(vertexShaderSize);
+	vsErrors.resize(vertexShaderSize);
+	psBlob.resize(pixelShaderSize);
+	psErrors.resize(pixelShaderSize);
+
+	for (UINT i = 0; i < vertexShaderSize; i++)
 	{
 		std::string vertexShaderString = ShaderAsString(vertexShaders[i].c_str());
 		if (FAILED(D3DCompile(vertexShaderString.c_str(), vertexShaderString.length(),
@@ -1038,7 +1041,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		}
 	}
 	// Create Pixel Shader
-	for (UINT i = 0; i < ARRAYSIZE(pixelShaders); i++)
+	for (UINT i = 0; i < pixelShaderSize; i++)
 	{
 		std::string pixelShaderString = ShaderAsString(pixelShaders[i].c_str());
 		if (FAILED(D3DCompile(pixelShaderString.c_str(), pixelShaderString.length(),
@@ -1105,7 +1108,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	}
 
 	device->CreateRootSignature(0, signature->GetBufferPointer(),
-		signature->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
+		signature->GetBufferSize(), IID_PPV_ARGS(rootSignature.ReleaseAndGetAddressOf()));
 
 	// create pipeline state
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psDesc = {};
@@ -1122,7 +1125,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	psDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 	psDesc.SampleDesc.Count = 1;
-	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipeline));
+	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(pipeline.ReleaseAndGetAddressOf()));
 	if (FAILED(hr))
 	{
 		abort();
@@ -1132,7 +1135,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[1].Get());
 	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[1].Get());
 	psDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(&pipelineSkybox));
+	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(pipelineSkybox.ReleaseAndGetAddressOf()));
 	if (FAILED(hr))
 	{
 		abort();
@@ -1141,7 +1144,8 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	UINT descSize = 0;
 	hr = CreateHeap(device, 1,
-		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 
+		D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		imguiSrvDescHeap, descSize);
 
 	// Setup Dear ImGui context
