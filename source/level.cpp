@@ -120,54 +120,19 @@ GW::MATH::GMATRIXF Level::ReadMatrixData()
 {
 	GW::MATH::GMATRIXF matrix = {};
 	CHAR buffer[256] = {};
-	input.getline(buffer, 256, '('); // read up to the start of the matrix data
-
-	input.getline(buffer, 256, ','); // x
-	matrix.row1.x = std::stof(buffer);
-	input.getline(buffer, 256, ','); // y
-	matrix.row1.y = std::stof(buffer);
-	input.getline(buffer, 256, ','); // z
-	matrix.row1.z = std::stof(buffer);
-	input.getline(buffer, 256, ')'); // w
-	matrix.row1.w = std::stof(buffer);
+	int sscanfRetValue = -1;
 
 	input.getline(buffer, 256);
-	input.getline(buffer, 256, '(');
-
-	input.getline(buffer, 256, ','); // x
-	matrix.row2.x = std::stof(buffer);
-	input.getline(buffer, 256, ','); // y
-	matrix.row2.y = std::stof(buffer);
-	input.getline(buffer, 256, ','); // z
-	matrix.row2.z = std::stof(buffer);
-	input.getline(buffer, 256, ')'); // w
-	matrix.row2.w = std::stof(buffer);
+	sscanfRetValue = sscanf_s(buffer, "<Matrix 4x4 (%f, %f,  %f, %f)", &matrix.row1.x, &matrix.row1.y, &matrix.row1.z, &matrix.row1.w);
 
 	input.getline(buffer, 256);
-	input.getline(buffer, 256, '(');
-
-	input.getline(buffer, 256, ','); // x
-	matrix.row3.x = std::stof(buffer);
-	input.getline(buffer, 256, ','); // y
-	matrix.row3.y = std::stof(buffer);
-	input.getline(buffer, 256, ','); // z
-	matrix.row3.z = std::stof(buffer);
-	input.getline(buffer, 256, ')'); // w
-	matrix.row3.w = std::stof(buffer);
+	sscanfRetValue = sscanf_s(buffer, "            (%f, %f, %f, %f)", &matrix.row2.x, &matrix.row2.y, &matrix.row2.z, &matrix.row2.w);
 
 	input.getline(buffer, 256);
-	input.getline(buffer, 256, '(');
-
-	input.getline(buffer, 256, ','); // x
-	matrix.row4.x = std::stof(buffer);
-	input.getline(buffer, 256, ','); // y
-	matrix.row4.y = std::stof(buffer);
-	input.getline(buffer, 256, ','); // z
-	matrix.row4.z = std::stof(buffer);
-	input.getline(buffer, 256, ')'); // w
-	matrix.row4.w = std::stof(buffer);
+	sscanfRetValue = sscanf_s(buffer, "            (%f, %f, %f, %f)", &matrix.row3.x, &matrix.row3.y, &matrix.row3.z, &matrix.row3.w);
 
 	input.getline(buffer, 256);
+	sscanfRetValue = sscanf_s(buffer, "            (%f, %f, %f, %f)>", &matrix.row4.x, &matrix.row4.y, &matrix.row4.z, &matrix.row4.w);
 
 	return matrix;
 }
