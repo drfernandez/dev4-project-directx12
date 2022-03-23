@@ -161,14 +161,8 @@ BOOL Level::LoadH2B(const std::string& h2bFilePath, H2B::INSTANCED_MESH& instanc
 
 		instancedMesh.vertexOffset = vertex_count;
 
-		for (const auto& vertex : p.vertices)
-		{
-			vertices.push_back(vertex);
-		}
-		for (const auto& index : p.indices)
-		{
-			indices.push_back(index);
-		}
+		vertices.insert(vertices.end(), p.vertices.begin(), p.vertices.end());
+		indices.insert(indices.end(), p.indices.begin(), p.indices.end());
 
 		vertex_count += p.vertexCount;
 		index_count += p.indexCount;
@@ -243,11 +237,7 @@ void Level::LoadCameraFromFile()
 
 BOOL Level::IsUniqueMesh(std::map<std::string, H2B::INSTANCED_MESH>& container, const std::string& assetName)
 {
-	BOOL IsUnique = TRUE;
 	auto containerIter = container.find(assetName);
-	if (containerIter != container.end())
-	{
-		IsUnique = FALSE;
-	}
+	BOOL IsUnique = (containerIter != container.end()) ? FALSE : TRUE;
 	return IsUnique;
 }
