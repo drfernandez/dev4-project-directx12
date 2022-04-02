@@ -239,7 +239,7 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 	win.GetHeight(screen_height);
 	d3d.GetAspectRatio(aspect_ratio);
 
-	for (UINT i = 0; i < 256; i++)
+	for (UINT i = 0; i < 256U; i++)
 	{
 		kbmProxy.GetState(i, kbmState[i]);
 		controllerProxy.GetState(0, i, controllerState[i]);
@@ -294,7 +294,7 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 
 	// end of camera update
 	matrixProxy.InverseF(worldCamera, viewMatrix);
-	matrixProxy.ProjectionDirectXLHF(G2D_DEGREE_TO_RADIAN(65),
+	matrixProxy.ProjectionDirectXLHF(G2D_DEGREE_TO_RADIAN(65.0f),
 		aspect_ratio, 0.1f, 1000.0f,
 		projectionMatrix);
 
