@@ -32,14 +32,14 @@ struct ATTRIBUTES
     uint illum; // illumination model
 };
 
-float4 CalculateDirectionalLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
+float4 CalculateDirectionalLight(LIGHT light, SURFACE surface)
 {
     float lightRatio = saturate(dot(-light.direction.xyz, surface.normal.xyz));
     float4 result = float4(light.color.xyz * lightRatio, 0.0f);
     return result;
 }
 
-float4 CalculatePointLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
+float4 CalculatePointLight(LIGHT light, SURFACE surface)
 {
     float3 toLight = float3(light.position.xyz - surface.position.xyz);
     float lightRatio = saturate(dot(normalize(toLight), surface.normal));
@@ -49,7 +49,7 @@ float4 CalculatePointLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
     return result;
 }
 
-float4 CalculateSpotLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
+float4 CalculateSpotLight(LIGHT light, SURFACE surface)
 {
     float3 toLight = normalize(light.position.xyz - surface.position.xyz);
     float toLightDistance = length(light.position.xyz - surface.position.xyz);
@@ -98,20 +98,20 @@ float4 CalculateSpecular(ATTRIBUTES mat, LIGHT light, SURFACE surface, float3 ca
     return spec;
 };
 
-float4 CalculateLight(ATTRIBUTES mat, LIGHT light, SURFACE surface)
+float4 CalculateLight(LIGHT light, SURFACE surface)
 {
     float4 luminance = float4(0, 0, 0, 0);
     [branch]
     switch (int(light.position.w))
     {
         case 0: // directional light
-            luminance += CalculateDirectionalLight(mat, light, surface);
+            luminance += CalculateDirectionalLight(light, surface);
             break;
         case 1: // point light
-            luminance += CalculatePointLight(mat, light, surface);
+            luminance += CalculatePointLight(light, surface);
             break;
         case 2: // spot light
-            luminance += CalculateSpotLight(mat, light, surface);
+            luminance += CalculateSpotLight(light, surface);
             break;
         default:
             break;

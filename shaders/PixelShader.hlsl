@@ -70,7 +70,7 @@ float4 main(PS_IN input) : SV_TARGET
     for (uint i = 0; i < numLights; i++)
     {
         LIGHT light = LightData[i];
-        luminance += CalculateLight(material, light, surface);
+        luminance += CalculateLight(light, surface);
         specular += CalculateSpecular(material, light, surface, SceneData.cameraPosition.xyz) * HasSpecular;
     }
     
