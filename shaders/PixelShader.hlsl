@@ -13,7 +13,7 @@ struct MESH_DATA
     uint mesh_id;
     uint material_id;
     uint has_texture;
-    uint texture_c_id;
+    uint texture_d_id;
     uint texture_n_id;
     uint texture_s_id;
 };
@@ -45,7 +45,7 @@ float4 main(PS_IN input) : SV_TARGET
 
     if (MeshData.has_texture & COLOR_FLAG)
     {
-        float4 texture_color = color_texture[MeshData.texture_c_id].Sample(filter, input.uv);
+        float4 texture_color = color_texture[MeshData.texture_d_id].Sample(filter, input.uv);
         material.Kd = texture_color.rgb;
         material.d = texture_color.a;
     }

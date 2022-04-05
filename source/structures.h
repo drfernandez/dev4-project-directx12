@@ -34,7 +34,7 @@ namespace H2B
 		BATCH drawInfo;
 		unsigned int materialIndex;
 		unsigned int hasTexture;
-		unsigned int colorTextureIndex;
+		unsigned int diffuseTextureIndex;
 		unsigned int normalTextureIndex;
 		unsigned int specularTextureIndex;
 
@@ -44,7 +44,7 @@ namespace H2B
 			drawInfo = { };
 			materialIndex = 0;
 			hasTexture = 0;
-			colorTextureIndex = 0;
+			diffuseTextureIndex = 0;
 			normalTextureIndex = 0;
 			specularTextureIndex = 0;
 		}
@@ -54,7 +54,7 @@ namespace H2B
 			drawInfo = m.drawInfo;
 			materialIndex = m.materialIndex;
 			hasTexture = 0;
-			colorTextureIndex = 0;
+			diffuseTextureIndex = 0;
 			normalTextureIndex = 0;
 			specularTextureIndex = 0;
 		}

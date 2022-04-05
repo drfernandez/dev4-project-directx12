@@ -1277,7 +1277,7 @@ VOID Renderer::Render()
 				{
 					mesh.second.meshIndex, submesh.materialIndex,
 					submesh.hasTexture & ~textureBitMask,
-					submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
+					submesh.diffuseTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
 				};
 				cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 				cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
@@ -1293,7 +1293,7 @@ VOID Renderer::Render()
 				{
 					mesh.second.meshIndex, submesh.materialIndex,
 					submesh.hasTexture,
-					submesh.colorTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
+					submesh.diffuseTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
 				};
 				cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
 				cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
