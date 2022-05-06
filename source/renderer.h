@@ -1107,6 +1107,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		abort();
 	}
 
+
 	device->CreateRootSignature(0, signature->GetBufferPointer(),
 		signature->GetBufferSize(), IID_PPV_ARGS(rootSignature.ReleaseAndGetAddressOf()));
 

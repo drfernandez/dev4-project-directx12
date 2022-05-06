@@ -3,6 +3,7 @@ static const uint COLOR_FLAG = 0x00000001u;
 static const uint NORMAL_FLAG = 0x00000002u;
 static const uint SPECULAR_FLAG = 0x00000004u;
 static const float PI = 3.14159f;
+static const float EPSILON = 0.000001f;
 
 struct SURFACE
 {
@@ -70,7 +71,6 @@ float4 CalculateSpecular(ATTRIBUTES mat, LIGHT light, SURFACE surface, float3 ca
     float3 toLight = normalize(light.position.xyz - surface.position.xyz);
     float attenuation = 1.0f;
     float specPower = mat.Ns;
-    [branch]
     switch (int(light.position.w))
     {
         case 0:
@@ -101,7 +101,6 @@ float4 CalculateSpecular(ATTRIBUTES mat, LIGHT light, SURFACE surface, float3 ca
 float4 CalculateLight(LIGHT light, SURFACE surface)
 {
     float4 luminance = float4(0, 0, 0, 0);
-    [branch]
     switch (int(light.position.w))
     {
         case 0: // directional light
@@ -128,8 +127,8 @@ float3x3 CotangentFrame(float3 normal, float3 view, float2 texcoord)
     float2 duv2 = ddy(texcoord);
 
     // solve the linear system
-    float3 dp2perp = cross(dp2, normal);
-    float3 dp1perp = cross(normal, dp1);
+    float3 dp2perp = cross(dp2, normal);    // z = cross(x,y) ??
+    float3 dp1perp = cross(normal, dp1);    // x = cross(y,z) ??
     float3 T = (dp2perp * duv1.x + dp1perp * duv2.x);
     float3 B = (dp2perp * duv1.y + dp1perp * duv2.y);
 
@@ -143,6 +142,8 @@ float3 PerturbNormal(float3 normal, float3 view, float2 texcoord, float3 lookup)
     return normalize(mul(lookup, TBN));
 }
 
+//////////////////////////////////////////////////////////////////
+// Normal Distribution Functions
 float D_GGX(float NoH, float a)
 {
     float a2 = a * a;
@@ -150,10 +151,39 @@ float D_GGX(float NoH, float a)
     return a2 / (PI * f * f);
 }
 
-float3 F_Schlick(float u, float3 f0)
+// https://youtu.be/RRE-F57fbXw?t=684
+float D_GGX_Trowbridge_Reitz(float alpha, float3 N, float3 H)
 {
-    return f0 + (float3(1.0, 1.0f, 1.0f) - f0) * pow(1.0 - u, 5.0);
+    float numerator = pow(alpha, 2.0f);
+    float NdotH = max(dot(N, H), 0.0f);
+    float denominator = max(PI * pow(pow(NdotH, 2.0f) * (numerator - 1.0f) + 1.0f, 2.0f), EPSILON);
+    return numerator / denominator;
 }
+// End Normal Distribution Functions
+//////////////////////////////////////////////////////////////////
+
+float G_SchlickBeckmann(float alpha, float3 N, float3 X)
+{
+    float numerator = max(dot(N, X), 0.0f);
+    float k = alpha / 2.0f;
+    float denominator = max(numerator * (1.0f - k) + k, EPSILON);
+    return numerator / denominator;
+}
+
+float G_Smith(float alpha, float3 N, float3 V, float3 L)
+{
+    return G_SchlickBeckmann(alpha, N, V) * G_SchlickBeckmann(alpha, N, L);
+
+}
+
+//////////////////////////////////////////////////////////////////
+// Fresnel
+float3 F_Schlick(float3 f0, float3 V, float3 H)
+{
+    return f0 + (float3(1.0, 1.0f, 1.0f) - f0) * pow(1.0 - max(dot(V, H), 0.0f), 5.0);
+}
+
+//////////////////////////////////////////////////////////////////
 
 float V_SmithGGXCorrelated(float NoV, float NoL, float a)
 {
@@ -166,4 +196,28 @@ float V_SmithGGXCorrelated(float NoV, float NoL, float a)
 float Fd_Lambert()
 {
     return 1.0 / PI;
+}
+
+// F0 = ???
+// N = normalized surface normal
+// L = normalized light direction (toLight)
+// V = normalized view direction (toCamera)
+// H = normalized halfvector (reflected vector)
+float3 BRDF(float3 F0, float3 N, float3 L, float3 V, float3 H, float alpha)
+{
+    float3 albedo = float3(1.0f, 0.0f, 0.0f);
+    float3 emissive = float3(0.0f, 0.0f, 0.0f);
+    float3 lightColor = float3(1.0f, 1.0f, 1.0f);
+    float3 Ks = F_Schlick(F0, V, H);
+    float3 Kd = float3(1.0f, 1.0f, 1.0f) - Ks;
+    float3 lambert = albedo / PI;
+    float3 D = D_GGX_Trowbridge_Reitz(alpha, N, H);
+    float3 G = G_Smith(alpha, N, V, L);
+    float3 F = Ks;
+    float3 cookTorranceNumerator = D * G * F;
+    float cookTorranceDenominator = max(4.0f * max(dot(V, N), 0.0f) * max(dot(L, N), 0.0f), EPSILON);
+    float3 cookTorrance = cookTorranceNumerator / cookTorranceDenominator;
+    float3 BRDF = Kd * lambert + cookTorrance;
+    float3 value = emissive + BRDF * lightColor * max(dot(N, L), 0.0f);
+    return BRDF;
 }
