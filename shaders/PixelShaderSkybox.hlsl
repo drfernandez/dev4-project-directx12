@@ -11,9 +11,9 @@ struct MESH_DATA
     uint mesh_id;
     uint material_id;
     uint has_texture;
-    uint texture_d_id;
-    uint texture_n_id;
-    uint texture_s_id;
+    uint diffuse_id;
+    uint normal_id;
+    uint specular_id;
 };
 
 struct SCENE

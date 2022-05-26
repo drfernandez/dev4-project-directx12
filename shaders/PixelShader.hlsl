@@ -13,9 +13,9 @@ struct MESH_DATA
     uint mesh_id;
     uint material_id;
     uint has_texture;
-    uint texture_d_id;
-    uint texture_n_id;
-    uint texture_s_id;
+    uint diffuse_id;
+    uint normal_id;
+    uint specular_id;
 };
 
 struct SCENE
@@ -45,14 +45,14 @@ float4 main(PS_IN input) : SV_TARGET
 
     if (MeshData.has_texture & COLOR_FLAG)
     {
-        float4 texture_color = color_texture[MeshData.texture_d_id].Sample(filter, input.uv);
+        float4 texture_color = color_texture[MeshData.diffuse_id].Sample(filter, input.uv);
         material.Kd = texture_color.rgb;
         material.d = texture_color.a;
     }
 
     if (MeshData.has_texture & NORMAL_FLAG)
     {
-        float3 normal_color = normal_texture[MeshData.texture_n_id].Sample(filter, input.uv).xyz;
+        float3 normal_color = normal_texture[MeshData.normal_id].Sample(filter, input.uv).xyz;
         float3 viewDirection = normalize(SceneData.cameraPosition.xyz - input.wpos);
         normal_color = normalize(normal_color * 2.0f - 1.0f);
         surface.normal = PerturbNormal(surface.normal, viewDirection, input.uv, normal_color);
@@ -60,7 +60,7 @@ float4 main(PS_IN input) : SV_TARGET
 
     if (MeshData.has_texture & SPECULAR_FLAG)
     {
-        HasSpecular = specular_texture[MeshData.texture_s_id].Sample(filter, input.uv).x;
+        HasSpecular = specular_texture[MeshData.specular_id].Sample(filter, input.uv).x;
     }
     
     float4 luminance = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -75,7 +75,7 @@ float4 main(PS_IN input) : SV_TARGET
     }
     
     float4 diffuse = float4(material.Kd, material.d);
-    float4 ambient = float4(material.Ka, 0.0f)/* * 0.25f*/;
+    float4 ambient = float4(material.Ka, 0.0f) * 0.25f;
     float4 emissive = float4(material.Ke, 0.0f);
     float4 result = float4(luminance.xyz + ambient.xyz, 1.0f);
     

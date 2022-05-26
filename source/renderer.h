@@ -160,8 +160,8 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE uwh;
-	win.GetWindowHandle(uwh);
+	//GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE uwh;
+	//win.GetWindowHandle(uwh);
 
 
 	IM_ASSERT(ImGui::GetCurrentContext() != NULL && "Missing dear imgui context. Refer to examples app!");
