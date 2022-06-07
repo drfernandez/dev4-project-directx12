@@ -245,6 +245,7 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 		controllerProxy.GetState(0, i, controllerState[i]);
 	}
 
+	GW::GReturn result = kbmProxy.GetMouseDelta(mouse_x_delta, mouse_y_delta);
 	bool move_up_changed = kbmState[G_KEY_SPACE] || controllerState[G_RIGHT_TRIGGER_AXIS];
 	bool move_down_changed = kbmState[G_KEY_LEFTSHIFT] || controllerState[G_LEFT_TRIGGER_AXIS];
 	bool move_forward_changed = kbmState[G_KEY_W] || controllerState[G_LY_AXIS];
@@ -254,18 +255,16 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 	bool mouse_r_button_pressed = kbmState[G_BUTTON_RIGHT];
 	bool aim_up_down_changed = controllerState[G_RY_AXIS];
 	bool aim_left_right_changed = controllerState[G_RX_AXIS];
-	GW::GReturn result = kbmProxy.GetMouseDelta(mouse_x_delta, mouse_y_delta);
 	bool mouse_moved = G_PASS(result) && result != GW::GReturn::REDUNDANT && mouse_r_button_pressed;
 
 	if (!mouse_moved)
 	{
 		mouse_x_delta = mouse_y_delta = 0.0f;
 	}
-
 	if (move_up_changed || move_down_changed)
 	{
 		FLOAT total_y_change = kbmState[G_KEY_SPACE] - kbmState[G_KEY_LEFTSHIFT] + controllerState[G_RIGHT_TRIGGER_AXIS] - controllerState[G_LEFT_TRIGGER_AXIS];
-		worldCamera.row4.y += total_y_change * camera_speed * deltaTime;
+		worldCamera.row4.y += total_y_change * per_frame_speed;
 	}
 	if (move_forward_changed || move_backward_changed || move_left_changed || move_right_changed)
 	{
@@ -315,17 +314,17 @@ inline VOID Renderer::ReleaseLevelResources()
 	vertexView = { 0 };
 	indexView = { 0 };
 
-	D3D12_COMPTR_SAFE_RELEASE(vertexBuffer);
-	D3D12_COMPTR_SAFE_RELEASE(indexBuffer);
-	D3D12_COMPTR_SAFE_RELEASE(constantBufferScene);
-	D3D12_COMPTR_SAFE_RELEASE(structuredBufferAttributesResource);
-	D3D12_COMPTR_SAFE_RELEASE(structuredBufferInstanceResource);
-	D3D12_COMPTR_SAFE_RELEASE(structuredBufferLightResource);
+	D3D12_SAFE_RELEASE(vertexBuffer);
+	D3D12_SAFE_RELEASE(indexBuffer);
+	D3D12_SAFE_RELEASE(constantBufferScene);
+	D3D12_SAFE_RELEASE(structuredBufferAttributesResource);
+	D3D12_SAFE_RELEASE(structuredBufferInstanceResource);
+	D3D12_SAFE_RELEASE(structuredBufferLightResource);
 	UINT resourceSize = textureResourceDiffuse.size();
 	for (UINT i = 0; i < resourceSize; i++)
 	{
-		D3D12_COMPTR_SAFE_RELEASE(textureResourceDiffuse[i]);
-		D3D12_COMPTR_SAFE_RELEASE(textureResourceDiffuseUpload[i]);
+		D3D12_SAFE_RELEASE(textureResourceDiffuse[i]);
+		D3D12_SAFE_RELEASE(textureResourceDiffuseUpload[i]);
 	}
 	textureResourceDiffuse.clear();
 	textureResourceDiffuseUpload.clear();
@@ -333,8 +332,8 @@ inline VOID Renderer::ReleaseLevelResources()
 	resourceSize = textureResourceNormal.size();
 	for (UINT i = 0; i < resourceSize; i++)
 	{
-		D3D12_COMPTR_SAFE_RELEASE(textureResourceNormal[i]);
-		D3D12_COMPTR_SAFE_RELEASE(textureResourceNormalUpload[i]);
+		D3D12_SAFE_RELEASE(textureResourceNormal[i]);
+		D3D12_SAFE_RELEASE(textureResourceNormalUpload[i]);
 	}
 	textureResourceNormal.clear();
 	textureResourceNormalUpload.clear();
@@ -342,16 +341,16 @@ inline VOID Renderer::ReleaseLevelResources()
 	resourceSize = textureResourceSpecular.size();
 	for (UINT i = 0; i < resourceSize; i++)
 	{
-		D3D12_COMPTR_SAFE_RELEASE(textureResourceSpecular[i]);
-		D3D12_COMPTR_SAFE_RELEASE(textureResourceSpecularUpload[i]);
+		D3D12_SAFE_RELEASE(textureResourceSpecular[i]);
+		D3D12_SAFE_RELEASE(textureResourceSpecularUpload[i]);
 	}
 	textureResourceSpecular.clear();
 	textureResourceSpecularUpload.clear();
 
-	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault2D);
-	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault2DUpload);
-	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault3D);
-	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault3DUpload);
+	D3D12_SAFE_RELEASE(textureResourceDefault2D);
+	D3D12_SAFE_RELEASE(textureResourceDefault2DUpload);
+	D3D12_SAFE_RELEASE(textureResourceDefault3D);
+	D3D12_SAFE_RELEASE(textureResourceDefault3DUpload);
 
 	constantBufferSceneData = nullptr;
 	structuredBufferAttributesData = nullptr;
@@ -413,7 +412,8 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// constant buffer heap creation
-		hr = CreateHeap(device, 5 + MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES + MAX_SPECULAR_TEXTURES,
+		const UINT numDescriptors = 5 + MAX_COLOR_TEXTURES + MAX_NORMAL_TEXTURES + MAX_SPECULAR_TEXTURES;
+		hr = CreateHeap(device, numDescriptors,
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
 			D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 			cbvsrvuavHeap, cbvDescriptorSize);
@@ -1211,8 +1211,6 @@ VOID Renderer::Render()
 	d3d.GetDepthStencilView((void**)&dsv);
 	// setup the pipeline
 	cmd->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
-	cmd->SetGraphicsRootSignature(rootSignature.Get());
-	cmd->SetPipelineState(pipeline.Get());
 
 	// if the currentlevel is loaded then process the level information
 	if (vertexView.BufferLocation && indexView.BufferLocation)
@@ -1224,6 +1222,8 @@ VOID Renderer::Render()
 		cmd->IASetVertexBuffers(0, 1, &vertexView);
 		cmd->IASetIndexBuffer(&indexView);
 		cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		cmd->SetGraphicsRootSignature(rootSignature.Get());
+		cmd->SetPipelineState(pipeline.Get());
 
 		if (constantBufferScene)
 		{
@@ -1270,11 +1270,11 @@ VOID Renderer::Render()
 			cmd->SetGraphicsRootDescriptorTable(8, specularTextureSrvHandle);
 		}
 
-		for (const auto& mesh : currentLevel.uniqueMeshes)	// mesh count
+		for (const auto& mesh : currentLevel.uniqueMeshes)		// mesh count
 		{
 			for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 			{
-				UINT root32BitConstants[] =
+				UINT root32BitConstants[] =						// create root 32bit constants
 				{
 					mesh.second.meshIndex, submesh.materialIndex,
 					submesh.hasTexture & ~textureBitMask,
@@ -1285,12 +1285,12 @@ VOID Renderer::Render()
 			}
 		}
 
-		cmd->SetPipelineState(pipelineSkybox.Get());
+		cmd->SetPipelineState(pipelineSkybox.Get());			// set skybox pipeline
 		for (const auto& mesh : currentLevel.uniqueSkyboxes)	// skybox count
 		{
 			for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 			{
-				UINT root32BitConstants[] =
+				UINT root32BitConstants[] =						// create root 32bit constants
 				{
 					mesh.second.meshIndex, submesh.materialIndex,
 					submesh.hasTexture,

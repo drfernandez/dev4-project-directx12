@@ -126,7 +126,7 @@ GW::MATH::GMATRIXF Level::ReadMatrixData()
 	input.getline(buffer[1], 256);
 	input.getline(buffer[2], 256);
 	input.getline(buffer[3], 256);
-	sscanfRetValue = sscanf_s(buffer[0], "<Matrix 4x4 (%f, %f,  %f, %f)",	&matrix.row1.x, &matrix.row1.y, &matrix.row1.z, &matrix.row1.w);
+	sscanfRetValue = sscanf_s(buffer[0], "<Matrix 4x4 (%f, %f, %f, %f)",	&matrix.row1.x, &matrix.row1.y, &matrix.row1.z, &matrix.row1.w);
 	sscanfRetValue = sscanf_s(buffer[1], "            (%f, %f, %f, %f)",	&matrix.row2.x, &matrix.row2.y, &matrix.row2.z, &matrix.row2.w);
 	sscanfRetValue = sscanf_s(buffer[2], "            (%f, %f, %f, %f)",	&matrix.row3.x, &matrix.row3.y, &matrix.row3.z, &matrix.row3.w);
 	sscanfRetValue = sscanf_s(buffer[3], "            (%f, %f, %f, %f)>",	&matrix.row4.x, &matrix.row4.y, &matrix.row4.z, &matrix.row4.w);
@@ -220,7 +220,8 @@ void Level::LoadLightFromFile()
 		information.row1,
 		information.row2,
 		information.row3,
-		information.row4);
+		information.row4
+	);
 	uniqueLights.push_back(l);
 }
 
