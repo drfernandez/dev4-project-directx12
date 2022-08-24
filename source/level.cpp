@@ -43,19 +43,22 @@ BOOL Level::LoadLevel(const std::string& filepath)
 	for (auto& mesh : uniqueMeshes)
 	{
 		mesh.second.meshIndex = meshID;
-		for (const auto& matrix : mesh.second.matrices)
-		{
-			meshID++;
-			instanceData.push_back(matrix);
-		}
+		instanceData.insert(instanceData.end(), mesh.second.matrices.begin(), mesh.second.matrices.end());
+		meshID = instanceData.size();
+		//for (const auto& matrix : mesh.second.matrices)
+		//{
+		//	meshID++;
+		//	instanceData.push_back(matrix);
+		//}
 	}
 	for (auto& skybox : uniqueSkyboxes)
 	{
 		skybox.second.meshIndex = meshID;
-		for (const auto& matrix : skybox.second.matrices)
-		{
-			meshID++;
-		}
+		meshID += skybox.second.matrices.size();
+		//for (const auto& matrix : skybox.second.matrices)
+		//{
+		//	meshID++;
+		//}
 	}
 
 	return TRUE;
