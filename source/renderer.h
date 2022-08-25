@@ -1067,11 +1067,11 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 3, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[9] = {};
-	rootParameters[0].InitAsConstants(6, 0, 0);					// num32bitConstants, register, space  (mesh_id)	b0, spaec0
-	rootParameters[1].InitAsConstantBufferView(1, 0);			// register, space	(view,projection)				b1, spaec0
-	rootParameters[2].InitAsShaderResourceView(0, 0);			// register, space	(OBJ_ATTRIBUTES)				t0, spaec0
-	rootParameters[3].InitAsShaderResourceView(1, 0);			// register, space	(instance matrix data)			t1, spaec0
-	rootParameters[4].InitAsShaderResourceView(2, 0);			// register, space	(light data)					t2, spaec0
+	rootParameters[0].InitAsConstants(6, 0, 0);					// num32bitConstants, register, space  (mesh_id)	b0, space0
+	rootParameters[1].InitAsConstantBufferView(1, 0);			// register, space	(view,projection)				b1, space0
+	rootParameters[2].InitAsShaderResourceView(0, 0);			// register, space	(OBJ_ATTRIBUTES)				t0, space0
+	rootParameters[3].InitAsShaderResourceView(1, 0);			// register, space	(instance matrix data)			t1, space0
+	rootParameters[4].InitAsShaderResourceView(2, 0);			// register, space	(light data)					t2, space0
 	rootParameters[5].InitAsDescriptorTable(1, &ranges[0]);		// count, table(s) (skybox texture)					t3, space0
 	rootParameters[6].InitAsDescriptorTable(1, &ranges[1]);		// count, table(s) (color textures)					t0, space1
 	rootParameters[7].InitAsDescriptorTable(1, &ranges[2]);		// count, table(s) (normal textures)				t0, space2
