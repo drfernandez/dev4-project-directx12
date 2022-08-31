@@ -492,7 +492,7 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		{
 			hr = constantBufferScene->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&constantBufferSceneData));
 		}
-
+		// attributes can be written to once since these will not change
 		if (structuredBufferAttributesResource)
 		{
 			hr = structuredBufferAttributesResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&structuredBufferAttributesData));
@@ -502,7 +502,7 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 				structuredBufferAttributesResource->Unmap(0, nullptr);
 			}
 		}
-
+		// lights can be written to once since these will not change
 		if (structuredBufferLightResource)
 		{
 			hr = structuredBufferLightResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&structuredBufferLightData));
@@ -1158,10 +1158,12 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	// Setup Platform/Renderer backends
 	bool success = false;
 	success = ImGui_ImplWin32_Init(uwh.window);
+	if (!success) abort();
 	success = ImGui_ImplDX12_Init(device, 2,
 		DXGI_FORMAT_R8G8B8A8_UNORM, imguiSrvDescHeap.Get(),
 		imguiSrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
 		imguiSrvDescHeap->GetGPUDescriptorHandleForHeapStart());
+	if (!success) abort();
 
 	// free temporary handle
 	device->Release();
