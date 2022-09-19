@@ -118,6 +118,7 @@ namespace H2B
 				file.read(reinterpret_cast<char*>(&meshes[i].drawInfo), 8);
 				file.read(reinterpret_cast<char*>(&meshes[i].materialIndex), 4);
 			}
+			file.close();
 			return true;
 		}
 		void Clear()

@@ -14,6 +14,7 @@
 #include "../imgui/imgui_impl_dx12.h"
 #include "../imgui/imgui_impl_win32.h"
 #include <algorithm>
+#include <stdlib.h>
 
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
@@ -160,10 +161,6 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	//GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE uwh;
-	//win.GetWindowHandle(uwh);
-
-
 	IM_ASSERT(ImGui::GetCurrentContext() != NULL && "Missing dear imgui context. Refer to examples app!");
 	static bool showMainMenu = true;
 	//ImGui::ShowDemoWindow(&showMainMenu);
@@ -196,6 +193,45 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 		}
 		ImGui::EndMainMenuBar();
 	}
+
+	ImGui::SetNextWindowCollapsed(true, ImGuiCond_::ImGuiCond_Once);
+	if (ImGui::Begin("Scene"))
+	{
+		//ImGui::Text("Lights");
+		std::vector<const char*> light_list;
+		for (const auto& item : currentLevel.uniqueLights)
+		{
+			int light_type = static_cast<int>(item.position.w);
+			switch (light_type)
+			{
+			case 0:		// directional
+				light_list.push_back("Directional");
+				break;
+			case 1:		// point
+				light_list.push_back("Point");
+				break;
+			case 2:		// spot
+				light_list.push_back("Spot");
+				break;
+			default:
+				break;
+			}
+		}
+		static int item_current = 0;
+		ImGui::ListBox("Lights", &item_current, light_list.data(), (int)light_list.size(), 6);
+		
+		ImGui::Spacing();
+		ImGui::Text("Light Information");
+		if (currentLevel.uniqueLights.size() > 0)
+		{
+			H2B::LIGHT& current_light = currentLevel.uniqueLights[item_current];
+			ImGui::InputFloat3("Position", (float*)&current_light.position);
+			ImGui::InputFloat3("Direction", (float*)&current_light.direction);
+			ImGui::InputFloat4("Attributes", (float*)&current_light.attributes);
+			ImGui::ColorEdit3("Color", (float*)current_light.color.data);
+		}
+	}
+	ImGui::End();
 
 	// Rendering
 	ImGui::Render();
@@ -1167,6 +1203,8 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	// free temporary handle
 	device->Release();
+
+	// Dear ImGui variables
 }
 
 Renderer::~Renderer()
@@ -1353,6 +1391,21 @@ VOID Renderer::Update(FLOAT deltaTime)
 			GW::MATH::GMATRIXF skyboxWorldMatrix = GW::MATH::GIdentityMatrixF;
 			skyboxWorldMatrix.row4 = worldCamera.row4;
 			memcpy(&structuredBufferInstanceData[numInstances - 1], &skyboxWorldMatrix, sizeof(GW::MATH::GMATRIXF));
+			structuredBufferInstanceResource->Unmap(0, nullptr);
+		}
+	}
+
+	if (structuredBufferLightResource)
+	{
+		UINT numLights = currentLevel.uniqueLights.size();
+		hr = structuredBufferLightResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&structuredBufferLightData));
+		if (SUCCEEDED(hr))
+		{
+			if (numLights > 0)
+			{
+				memcpy(structuredBufferLightData, currentLevel.uniqueLights.data(), sizeof(H2B::LIGHT) * numLights);
+				structuredBufferLightResource->Unmap(0, nullptr);
+			}
 		}
 	}
 }
