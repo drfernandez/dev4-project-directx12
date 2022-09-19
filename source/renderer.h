@@ -1220,11 +1220,6 @@ Renderer::~Renderer()
 		constantBufferScene->Unmap(0, nullptr);
 	}
 
-	if (structuredBufferInstanceResource)
-	{
-		structuredBufferInstanceResource->Unmap(0, nullptr);
-	}
-
 	ReleaseLevelResources();
 
 	//ID3D12Device* device = nullptr;
