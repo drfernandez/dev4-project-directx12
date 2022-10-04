@@ -103,6 +103,8 @@ private:
 	static LONG_PTR												gatewareWndProc;
 
 	// used by Dear ImGui
+	INT															imguiLightIndex;
+
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	VOID DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> cmd);
 
@@ -217,14 +219,13 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 				break;
 			}
 		}
-		static int item_current = 0;
-		ImGui::ListBox("Lights", &item_current, light_list.data(), (int)light_list.size(), 6);
+		ImGui::ListBox("Lights", &imguiLightIndex, light_list.data(), (int)light_list.size(), 6);
 		
 		ImGui::Spacing();
 		ImGui::Text("Light Information");
 		if (currentLevel.uniqueLights.size() > 0)
 		{
-			H2B::LIGHT& current_light = currentLevel.uniqueLights[item_current];
+			H2B::LIGHT& current_light = currentLevel.uniqueLights[imguiLightIndex];
 			ImGui::InputFloat3("Position", (float*)&current_light.position);
 			ImGui::InputFloat3("Direction", (float*)&current_light.direction);
 			ImGui::InputFloat4("Attributes", (float*)&current_light.attributes);
@@ -555,6 +556,9 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 	cmd->Release();
 	allocator->Release();
 	queue->Release();
+
+	// ImGui Variable initialization
+	imguiLightIndex = 0;
 
 	return TRUE;
 }
