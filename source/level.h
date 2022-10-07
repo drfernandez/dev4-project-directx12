@@ -22,7 +22,7 @@ private:
 	void LoadMeshFromFile();
 	void LoadLightFromFile();
 	void LoadCameraFromFile();
-	BOOL IsUniqueMesh(std::map<std::string, H2B::INSTANCED_MESH>& container, const std::string& assetName);
+	BOOL IsUniqueMesh(const std::map<std::string, H2B::INSTANCED_MESH>& container, const std::string& assetName);
 
 public:
 	std::string name;

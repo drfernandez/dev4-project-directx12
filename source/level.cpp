@@ -236,7 +236,7 @@ void Level::LoadCameraFromFile()
 	camera = information;
 }
 
-BOOL Level::IsUniqueMesh(std::map<std::string, H2B::INSTANCED_MESH>& container, const std::string& assetName)
+BOOL Level::IsUniqueMesh(const std::map<std::string, H2B::INSTANCED_MESH>& container, const std::string& assetName)
 {
 	auto containerIter = container.find(assetName);
 	BOOL IsUnique = (containerIter != container.end()) ? FALSE : TRUE;
