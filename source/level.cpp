@@ -45,20 +45,11 @@ BOOL Level::LoadLevel(const std::string& filepath)
 		mesh.second.meshIndex = meshID;
 		instanceData.insert(instanceData.end(), mesh.second.matrices.begin(), mesh.second.matrices.end());
 		meshID = instanceData.size();
-		//for (const auto& matrix : mesh.second.matrices)
-		//{
-		//	meshID++;
-		//	instanceData.push_back(matrix);
-		//}
 	}
 	for (auto& skybox : uniqueSkyboxes)
 	{
 		skybox.second.meshIndex = meshID;
 		meshID += skybox.second.matrices.size();
-		//for (const auto& matrix : skybox.second.matrices)
-		//{
-		//	meshID++;
-		//}
 	}
 
 	return TRUE;
