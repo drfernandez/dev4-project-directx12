@@ -70,19 +70,19 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						constantBufferScene;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								cbvSceneHandle;
-	SCENE* constantBufferSceneData;
+	SCENE*														constantBufferSceneData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferAttributesResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferAttributeHandle;
-	H2B::ATTRIBUTES* structuredBufferAttributesData;
+	H2B::ATTRIBUTES*											structuredBufferAttributesData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferInstanceResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferInstanceHandle;
-	GW::MATH::GMATRIXF* structuredBufferInstanceData;
+	GW::MATH::GMATRIXF*											structuredBufferInstanceData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferLightResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferLightHandle;
-	H2B::LIGHT* structuredBufferLightData;
+	H2B::LIGHT*													structuredBufferLightData;
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuse;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuseUpload;
