@@ -75,7 +75,7 @@ float4 main(PS_IN input) : SV_TARGET
     }
     
     float4 diffuse = float4(material.Kd, material.d);
-    float4 ambient = float4(material.Ka, 0.0f) * 0.25f;
+    float4 ambient = float4(material.Ka, 0.0f) * 0.15f;
     float4 emissive = float4(material.Ke, 0.0f);
     float4 result = float4(luminance.xyz + ambient.xyz, 1.0f);
     
