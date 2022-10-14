@@ -70,7 +70,7 @@ float4 CalculateSpecular(ATTRIBUTES mat, LIGHT light, SURFACE surface, float3 ca
     float3 toCam = normalize(cameraPos - surface.position);
     float3 toLight = normalize(light.position.xyz - surface.position.xyz);
     float attenuation = 1.0f;
-    float specPower = mat.Ns;
+    float specPower = (mat.Ns > 0) ? mat.Ns : 128.0f;
     switch (int(light.position.w))
     {
         case 0:

@@ -418,30 +418,36 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// vertex buffer creation
-		UINT vertexBufferStride = sizeof(H2B::VERTEX);
-		UINT vertexBufferSize = vertexBufferStride * currentLevel.vertex_count;
-		void* vertexBufferData = currentLevel.vertices.data();
-		hr = LoadVertexData(device,
-			vertexBufferData, vertexBufferStride, vertexBufferSize,
-			vertexBuffer, vertexView);
-		if (FAILED(hr))
+		if (currentLevel.vertex_count > 0)
 		{
-			abort();
+			UINT vertexBufferStride = sizeof(H2B::VERTEX);
+			UINT vertexBufferSize = vertexBufferStride * currentLevel.vertex_count;
+			void* vertexBufferData = currentLevel.vertices.data();
+			hr = LoadVertexData(device,
+				vertexBufferData, vertexBufferStride, vertexBufferSize,
+				vertexBuffer, vertexView);
+			if (FAILED(hr))
+			{
+				abort();
+			}
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 	{
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// index buffer creation
-		DXGI_FORMAT indexBufferFormat = DXGI_FORMAT_R32_UINT;
-		UINT indexBufferSize = sizeof(UINT) * currentLevel.index_count;
-		void* indexBufferData = currentLevel.indices.data();
-		hr = LoadIndexData(device,
-			indexBufferData, indexBufferFormat, indexBufferSize,
-			indexBuffer, indexView);
-		if (FAILED(hr))
+		if (currentLevel.index_count > 0)
 		{
-			abort();
+			DXGI_FORMAT indexBufferFormat = DXGI_FORMAT_R32_UINT;
+			UINT indexBufferSize = sizeof(UINT) * currentLevel.index_count;
+			void* indexBufferData = currentLevel.indices.data();
+			hr = LoadIndexData(device,
+				indexBufferData, indexBufferFormat, indexBufferSize,
+				indexBuffer, indexView);
+			if (FAILED(hr))
+			{
+				abort();
+			}
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
