@@ -6,6 +6,7 @@
 #include <fstream>
 #include "materialmanager.h"
 #include "texturemanager.h"
+#include "frustum.h"
 
 class Level
 {
@@ -37,6 +38,7 @@ public:
 	std::vector<GW::MATH::GMATRIXF> instanceData;
 	MaterialManager materials;
 	TextureManager textures;
+	Frustum frustum;
 
 	Level();
 	~Level();

@@ -180,15 +180,13 @@ void Level::LoadMeshFromFile()
 	H2B::INSTANCED_MESH instancedMesh = H2B::INSTANCED_MESH();
 	bool exists = FileExists(path);
 	bool isUnique = IsUniqueMesh(container, assetName);
-	if (exists && isUnique)
+	if (exists && isUnique && LoadH2B(path, instancedMesh))
 	{
-		if (LoadH2B(path, instancedMesh))
-		{
-			instancedMesh.meshName = assetName;
-			instancedMesh.numInstances = 1;
-			instancedMesh.matrices.push_back(world);
-			container[assetName] = instancedMesh;
-		}
+		instancedMesh.meshName = assetName;
+		instancedMesh.numInstances = 1;
+		instancedMesh.matrices.push_back(world);
+		container[assetName] = instancedMesh;
+
 	}
 	else if (exists && !isUnique)
 	{
@@ -209,6 +207,10 @@ void Level::LoadLightFromFile()
 	else if (strcmp(buffer, "Spot") == 0)
 	{
 		information.row1.w = 2.0f;
+	}
+	else if (strcmp(buffer, "Directional") == 0)
+	{
+		information.row1.w = 0.0f;
 	}
 	H2B::LIGHT l = H2B::LIGHT(
 		information.row1,
