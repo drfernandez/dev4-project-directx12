@@ -7,9 +7,11 @@ Frustum::Frustum()
 	this->attachMatrix = GW::MATH::GIdentityMatrixF;
 }
 
-Frustum::Frustum(GW::MATH::GMATRIXF matrix)
+Frustum::Frustum(const GW::MATH::GMATRIXF& matrix)
 {
-	attachMatrix = matrix;
+	this->corners = { 0 };
+	this->planes = { 0 };
+	this->attachMatrix = matrix;
 }
 
 Frustum::~Frustum()
@@ -55,41 +57,63 @@ GW::MATH::GPLANEF Frustum::CalculatePlane(GW::MATH::GVECTORF a, GW::MATH::GVECTO
 
 int Frustum::ClassifySphereToPlane(const GW::MATH::GSPHEREF& sphere, const GW::MATH::GPLANEF& plane)
 {
-	/*
 	int result = 0;
-	float distance = dot(sphere.center, plane.normal) - plane.offset;
+	float distance = 0.0f;
+	GW::MATH::GVECTORF sc = { sphere.data.x, sphere.data.y, sphere.data.z, 0 };
+	GW::MATH::GVECTORF pn = { plane.data.x, plane.data.y, plane.data.z, 0 };
+	GW::MATH::GVector::DotF(sc, pn, distance);
+	distance -= plane.distance;
 	if (distance > sphere.radius)
 	{
 		result = 1;
 	}
 	else if (distance < -sphere.radius)
 	{
-		result = -1;
+		result = 2;
 	}
 	return result;
-	*/
-	int result = 0;
-	float distance = 0.0f;
-	//GW::MATH::GVector::DotF(sphere.d)
-	return 0;
 }
 
 int Frustum::ClassifyAABBToPlane(const GW::MATH::GAABBMMF& aabb, const GW::MATH::GPLANEF& plane)
 {
-	return 0;
+	GW::MATH::GVECTORF center = { 0 };
+	GW::MATH::GVector::AddVectorF(aabb.max, aabb.min, center);
+	GW::MATH::GVECTORF extents = { 0 };
+	GW::MATH::GVector::SubtractVectorF(aabb.max, center, extents);
+	GW::MATH::GVECTORF absnormal = { fabs(plane.data.x), fabs(plane.data.y), fabs(plane.data.z), 0.0f };
+	float radius = 0.0f;
+	GW::MATH::GVector::DotF(absnormal, extents, radius);
+	GW::MATH::GSPHEREF sphere = { center.x, center.y, center.z, radius };
+	return ClassifySphereToPlane(sphere, plane);
 }
 
 void Frustum::CalculateFrustum(float fov, float ar, float nd, float fd, const GW::MATH::GMATRIXF& mat)
 {
+	float nearWidth = 0.0f;
+	float nearHeight = 0.0f;
+	float farWidth = 0.0f;
+	float farHeight = 0.0f;
+
+	GW::MATH::GVECTORF nearCenter = { 0 };
+	GW::MATH::GVECTORF farCenter = { 0 };
+
+	GW::MATH::GVECTORF scaledDistance = { 0 };
+
+	GW::MATH::GVector::ScaleF(mat.row3, nd, scaledDistance);
+	GW::MATH::GVector::AddVectorF(mat.row4, scaledDistance, nearCenter);
+	GW::MATH::GVector::ScaleF(mat.row3, fd, scaledDistance);
+	GW::MATH::GVector::AddVectorF(mat.row4, scaledDistance, farCenter);
 
 }
 
 bool Frustum::CompareSphereToFrustum(const GW::MATH::GSPHEREF& sphere)
 {
-	return false;
+	bool result = false;
+	return result;
 }
 
 bool Frustum::CompareAABBToFrustum(const GW::MATH::GAABBMMF& aabb)
 {
-	return false;
+	bool result = false;
+	return result;
 }

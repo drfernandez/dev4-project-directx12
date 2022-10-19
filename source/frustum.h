@@ -16,7 +16,7 @@ private:
 
 public:
 	Frustum();
-	Frustum(GW::MATH::GMATRIXF matrix);
+	Frustum(const GW::MATH::GMATRIXF& matrix);
 	~Frustum();
 	Frustum(const Frustum& copy);
 	Frustum& operator=(const Frustum& copy);
