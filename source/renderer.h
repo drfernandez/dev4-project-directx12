@@ -15,6 +15,7 @@
 #include "../imgui/imgui_impl_win32.h"
 #include <algorithm>
 #include <stdlib.h>
+#include "frustum.h"
 
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
@@ -231,6 +232,12 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 			ImGui::InputFloat4("Attributes", (float*)&current_light.attributes);
 			ImGui::ColorEdit3("Color", (float*)current_light.color.data);
 		}
+
+		ImGui::Spacing();
+		ImGui::Text("Frustum Culling");
+		std::string itemsRendered = "Number of Items Rendered: ";// +currentLevel.culledUniqueMeshes.size();
+		itemsRendered.append(std::to_string(currentLevel.culledUniqueMeshes.size()));
+		ImGui::Text(itemsRendered.c_str());
 	}
 	ImGui::End();
 
@@ -275,6 +282,7 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 	win.GetWidth(screen_width);
 	win.GetHeight(screen_height);
 	d3d.GetAspectRatio(aspect_ratio);
+	currentLevel.aspectRatio = aspect_ratio;
 
 	for (UINT i = 0; i < 256U; i++)
 	{
@@ -330,9 +338,12 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 
 	// end of camera update
 	matrixProxy.InverseF(worldCamera, viewMatrix);
-	matrixProxy.ProjectionDirectXLHF(G2D_DEGREE_TO_RADIAN(65.0f),
+	matrixProxy.ProjectionDirectXLHF(G_DEGREE_TO_RADIAN_F(65.0f),
 		aspect_ratio, 0.1f, 1000.0f,
 		projectionMatrix);
+
+	currentLevel.aspectRatio = aspect_ratio;
+	currentLevel.camera = worldCamera;
 
 	bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
 	bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
@@ -1313,7 +1324,22 @@ VOID Renderer::Render()
 			cmd->SetGraphicsRootDescriptorTable(8, specularTextureSrvHandle);
 		}
 
-		for (const auto& mesh : currentLevel.uniqueMeshes)		// mesh count
+		//for (const auto& mesh : currentLevel.uniqueMeshes)		// mesh count
+		//{
+		//	for (const auto& submesh : mesh.second.subMeshes)	// submesh count
+		//	{
+		//		UINT root32BitConstants[] =						// create root 32bit constants
+		//		{
+		//			mesh.second.meshIndex, submesh.materialIndex,
+		//			submesh.hasTexture & ~textureBitMask,
+		//			submesh.diffuseTextureIndex, submesh.normalTextureIndex, submesh.specularTextureIndex
+		//		};
+		//		cmd->SetGraphicsRoot32BitConstants(0, ARRAYSIZE(root32BitConstants), root32BitConstants, 0);
+		//		cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
+		//	}
+		//}
+
+		for (const auto& mesh : currentLevel.culledUniqueMeshes)		// mesh count
 		{
 			for (const auto& submesh : mesh.second.subMeshes)	// submesh count
 			{
@@ -1376,6 +1402,11 @@ VOID Renderer::Update(FLOAT deltaTime)
 		campos
 	};
 
+	if (vertexView.BufferLocation && indexView.BufferLocation)
+	{
+		currentLevel.FrustumCull();
+	}
+
 	if (constantBufferSceneData)
 	{
 		memcpy(constantBufferSceneData, &scene, sizeof(SCENE));
@@ -1389,7 +1420,7 @@ VOID Renderer::Update(FLOAT deltaTime)
 		{
 			if (numInstances - 1 > 0)
 			{
-				memcpy(structuredBufferInstanceData, currentLevel.instanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
+				memcpy(structuredBufferInstanceData, currentLevel.culledInstanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
 			}
 			GW::MATH::GMATRIXF skyboxWorldMatrix = GW::MATH::GIdentityMatrixF;
 			skyboxWorldMatrix.row4 = worldCamera.row4;
@@ -1411,4 +1442,5 @@ VOID Renderer::Update(FLOAT deltaTime)
 			}
 		}
 	}
+
 }

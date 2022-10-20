@@ -1,5 +1,7 @@
 #pragma once
 
+#define GATEWARE_ENABLE_MATH // Enables all Math Libraries
+
 #include "structures.h"
 #include <map>
 #include <vector>
@@ -24,10 +26,12 @@ private:
 	void LoadLightFromFile();
 	void LoadCameraFromFile();
 	BOOL IsUniqueMesh(const std::map<std::string, H2B::INSTANCED_MESH>& container, const std::string& assetName);
+	GW::MATH::GAABBMMF GenerateAABB(const std::vector<H2B::VERTEX>& verts);
 
 public:
 	std::string name;
 	GW::MATH::GMATRIXF camera;
+	FLOAT aspectRatio;
 	UINT vertex_count;
 	UINT index_count;
 	std::vector<H2B::VERTEX> vertices;
@@ -38,10 +42,15 @@ public:
 	std::vector<GW::MATH::GMATRIXF> instanceData;
 	MaterialManager materials;
 	TextureManager textures;
+
 	Frustum frustum;
+	std::map<std::string, H2B::INSTANCED_MESH> culledUniqueMeshes;
+	std::vector<GW::MATH::GMATRIXF> culledInstanceData;
+	std::vector<H2B::LIGHT> culledUniqueLights;
 
 	Level();
 	~Level();
 	BOOL LoadLevel(const std::string& filepath);
+	void FrustumCull();
 	void Clear();
 };

@@ -110,6 +110,7 @@ namespace H2B
 		unsigned int vertexOffset;
 		std::vector<GW::MATH::GMATRIXF> matrices;
 		std::vector<H2B::MESH2> subMeshes;
+		GW::MATH::GAABBMMF aabb;
 
 		INSTANCED_MESH()
 		{
@@ -119,6 +120,7 @@ namespace H2B
 			vertexOffset = 0;
 			matrices.clear();
 			subMeshes.clear();
+			aabb = { 0 };
 		}
 	};
 }

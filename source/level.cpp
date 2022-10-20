@@ -55,11 +55,55 @@ BOOL Level::LoadLevel(const std::string& filepath)
 	return TRUE;
 }
 
+void Level::FrustumCull()
+{
+	frustum.Create(G_DEGREE_TO_RADIAN_F(85.0f), aspectRatio, 0.1f, 1000.0f, camera);
+	culledUniqueMeshes.clear();
+
+	GW::MATH::GMATRIXF instanceMatrix = GW::MATH::GIdentityMatrixF;
+	for (const auto& mesh : uniqueMeshes)
+	{
+		H2B::INSTANCED_MESH currentMesh = mesh.second;
+		GW::MATH::GAABBMMF aabb = currentMesh.aabb;
+		currentMesh.matrices.clear();
+		currentMesh.numInstances = 0;
+
+		for (const auto& matrix : mesh.second.matrices)
+		{
+			instanceMatrix = matrix;
+			GW::MATH::GVector::VectorXMatrixF(currentMesh.aabb.min, instanceMatrix, aabb.min);
+			GW::MATH::GVector::VectorXMatrixF(currentMesh.aabb.max, instanceMatrix, aabb.max);
+			if (frustum.CompareAABBToFrustum(aabb))
+			{
+				currentMesh.matrices.push_back(matrix);
+				currentMesh.numInstances += 1;
+			}
+		}
+
+		if (currentMesh.numInstances > 0)
+		{
+			culledUniqueMeshes.insert(std::pair<std::string, H2B::INSTANCED_MESH>{ mesh.first, currentMesh });
+		}
+	}
+
+	culledInstanceData.clear();
+	UINT meshID = 0;
+	for (auto& mesh : culledUniqueMeshes)
+	{
+		mesh.second.meshIndex = meshID;
+		culledInstanceData.insert(culledInstanceData.end(), mesh.second.matrices.begin(), mesh.second.matrices.end());
+		meshID = culledInstanceData.size();
+	}
+
+	int d = 0;
+}
+
 void Level::Clear()
 {
 	if (input.is_open()) input.close();
 	name.clear();
 	camera = GW::MATH::GIdentityMatrixF;
+	aspectRatio = 0.0f;
 	vertex_count = 0;
 	index_count = 0;
 	vertices.clear();
@@ -151,6 +195,7 @@ BOOL Level::LoadH2B(const std::string& h2bFilePath, H2B::INSTANCED_MESH& instanc
 		}
 
 		instancedMesh.vertexOffset = vertex_count;
+		instancedMesh.aabb = GenerateAABB(p.vertices);
 
 		vertices.insert(vertices.end(), p.vertices.begin(), p.vertices.end());
 		indices.insert(indices.end(), p.indices.begin(), p.indices.end());
@@ -234,4 +279,23 @@ BOOL Level::IsUniqueMesh(const std::map<std::string, H2B::INSTANCED_MESH>& conta
 	auto containerIter = container.find(assetName);
 	BOOL IsUnique = (containerIter != container.end()) ? FALSE : TRUE;
 	return IsUnique;
+}
+
+GW::MATH::GAABBMMF Level::GenerateAABB(const std::vector<H2B::VERTEX>& verts)
+{
+	GW::MATH::GAABBMMF aabb;
+	aabb.min = { FLT_MAX, FLT_MAX, FLT_MAX, 1 };
+	aabb.max = { -FLT_MAX, -FLT_MAX, -FLT_MAX, 1 };
+
+	for (const auto& vertex : verts)
+	{
+		aabb.min.x = min(aabb.min.x, vertex.pos.x);
+		aabb.min.y = min(aabb.min.y, vertex.pos.y);
+		aabb.min.z = min(aabb.min.z, vertex.pos.z);
+		aabb.max.x = max(aabb.max.x, vertex.pos.x);
+		aabb.max.y = max(aabb.max.y, vertex.pos.y);
+		aabb.max.z = max(aabb.max.z, vertex.pos.z);
+	}
+
+	return aabb;
 }

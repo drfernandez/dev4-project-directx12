@@ -1,5 +1,7 @@
 #pragma once
 
+#define GATEWARE_ENABLE_MATH // Enables all Math Libraries
+
 #include "Gateware.h"
 #include <array>
 
@@ -25,7 +27,7 @@ public:
 	std::array<GW::MATH::GVECTORF, static_cast<size_t>(CORNERS::COUNT)> corners;
 	std::array<GW::MATH::GPLANEF, static_cast<size_t>(PLANE_SIDES::COUNT)> planes;
 
-	void CalculateFrustum(float fov, float ar, float nd, float fd, const GW::MATH::GMATRIXF& mat);
+	void Create(float fov, float ar, float nd, float fd, const GW::MATH::GMATRIXF& mat);
 	bool CompareSphereToFrustum(const GW::MATH::GSPHEREF& sphere);
 	bool CompareAABBToFrustum(const GW::MATH::GAABBMMF& aabb);
 };
