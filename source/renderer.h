@@ -112,7 +112,7 @@ private:
 	UINT CalculateConstantBufferByteSize(UINT byteSize);
 	std::string ShaderAsString(const CHAR* shaderFilePath);
 
-	VOID UpdateCamera(FLOAT deltaTime);
+	VOID UpdateCamera(FLOAT deltaTime, const std::vector<FLOAT>& kbmState, const std::vector<FLOAT>& controllerState);
 	VOID ReleaseLevelResources();
 	BOOL LoadLevelDataFromFile(const std::string& filename);
 	bool OpenFileDialogBox(GW::SYSTEM::UNIVERSAL_WINDOW_HANDLE windowHandle, std::string& fileName);
@@ -266,10 +266,9 @@ inline std::string Renderer::ShaderAsString(const CHAR* shaderFilePath)
 	return output;
 }
 
-inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
+inline VOID Renderer::UpdateCamera(FLOAT deltaTime, const std::vector<FLOAT>& kbmState, const std::vector<FLOAT>& controllerState)
 {
-	std::vector<FLOAT> kbmState(256);
-	std::vector<FLOAT> controllerState(256);
+
 	const FLOAT camera_speed = 0.5f;
 	FLOAT per_frame_speed = camera_speed * deltaTime;
 	FLOAT thumb_speed = G_PI_F * deltaTime * 0.05f;
@@ -284,11 +283,11 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 	d3d.GetAspectRatio(aspect_ratio);
 	currentLevel.aspectRatio = aspect_ratio;
 
-	for (UINT i = 0; i < 256U; i++)
-	{
-		kbmProxy.GetState(i, kbmState[i]);
-		controllerProxy.GetState(0, i, controllerState[i]);
-	}
+	//for (UINT i = 0; i < 256U; i++)
+	//{
+	//	kbmProxy.GetState(i, kbmState[i]);
+	//	controllerProxy.GetState(0, i, controllerState[i]);
+	//}
 
 	GW::GReturn result = kbmProxy.GetMouseDelta(mouse_x_delta, mouse_y_delta);
 	bool move_up_changed = kbmState[G_KEY_SPACE] || controllerState[G_RIGHT_TRIGGER_AXIS];
@@ -344,17 +343,6 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime)
 
 	currentLevel.aspectRatio = aspect_ratio;
 	currentLevel.camera = worldCamera;
-
-	bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
-	bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
-	if (textureOn)
-	{
-		textureBitMask = 0x00000000u;
-	}
-	else if (textureOff)
-	{
-		textureBitMask = 0x00000006u;
-	}
 }
 
 inline VOID Renderer::ReleaseLevelResources()
@@ -1388,9 +1376,52 @@ VOID Renderer::Update(FLOAT deltaTime)
 	win.GetWindowHandle(wndHandle);
 	BOOL IsFocusWindow = GetFocus() == (HWND&)wndHandle;
 
+	std::vector<FLOAT> kbmState(256);
+	std::vector<FLOAT> controllerState(256);
+	for (UINT i = 0; i < 256U; i++)
+	{
+		kbmProxy.GetState(i, kbmState[i]);
+		controllerProxy.GetState(0, i, controllerState[i]);
+	}
+
 	if (IsFocusWindow)
 	{
-		UpdateCamera(deltaTime);
+		UpdateCamera(deltaTime, kbmState, controllerState);
+	}
+
+	bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
+	bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
+	if (textureOn)
+	{
+		textureBitMask = 0x00000000u;
+	}
+	else if (textureOff)
+	{
+		textureBitMask = 0x00000006u;
+	}
+
+	auto& iter = currentLevel.uniqueMeshes.find("Character_Animated");
+	if (iter != currentLevel.uniqueMeshes.end())
+	{
+		GW::MATH::GMATRIXF& characterWorld = iter->second.matrices[0];
+		if (kbmState[G_KEY_UP])
+		{
+			GW::MATH::GVECTORF translation = { 0.0f, 0.0f, 1.0f * deltaTime, 0.0f };
+			matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
+		}
+		if (kbmState[G_KEY_DOWN])
+		{
+			GW::MATH::GVECTORF translation = { 0.0f, 0.0f, -1.0f * deltaTime, 0.0f };
+			matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
+		}
+		if (kbmState[G_KEY_LEFT])
+		{
+			matrixProxy.RotateYLocalF(characterWorld, deltaTime * -1.0f, characterWorld);
+		}
+		if (kbmState[G_KEY_RIGHT])
+		{
+			matrixProxy.RotateYLocalF(characterWorld, deltaTime * 1.0f, characterWorld);
+		}
 	}
 
 	GW::MATH::GVECTORF campos = worldCamera.row4;
@@ -1420,7 +1451,7 @@ VOID Renderer::Update(FLOAT deltaTime)
 		{
 			if (numInstances - 1 > 0)
 			{
-				memcpy(structuredBufferInstanceData, currentLevel.culledInstanceData.data(), sizeof(GW::MATH::GMATRIXF) * numInstances);
+				memcpy(structuredBufferInstanceData, currentLevel.culledInstanceData.data(), sizeof(GW::MATH::GMATRIXF) * currentLevel.culledInstanceData.size());
 			}
 			GW::MATH::GMATRIXF skyboxWorldMatrix = GW::MATH::GIdentityMatrixF;
 			skyboxWorldMatrix.row4 = worldCamera.row4;
