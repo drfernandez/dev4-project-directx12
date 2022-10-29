@@ -62,14 +62,23 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource>						vertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D12Resource>						indexBuffer;
 
+	enum SHADERS : const int
+	{
+		DEFAULT = 0,
+		SKYBOX,
+		DEBUGLINES,
+		COUNT
+	};
+
 	Microsoft::WRL::ComPtr<ID3D12RootSignature>					rootSignature;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipeline;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipelineSkybox;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipelineDebugLines;
 
 	UINT														cbvDescriptorSize;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				cbvsrvuavHeap;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource>						constantBufferScene;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						constantBufferSceneResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								cbvSceneHandle;
 	SCENE*														constantBufferSceneData;
 
@@ -197,10 +206,10 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 		ImGui::EndMainMenuBar();
 	}
 
-	ImGui::SetNextWindowCollapsed(true, ImGuiCond_::ImGuiCond_Once);
+	//ImGui::SetNextWindowCollapsed(true, ImGuiCond_::ImGuiCond_Once);
 	if (ImGui::Begin("Scene"))
 	{
-		//ImGui::Text("Lights");
+		ImGui::Text("Lights");
 		std::vector<const char*> light_list;
 		for (const auto& item : currentLevel.uniqueLights)
 		{
@@ -220,8 +229,8 @@ inline VOID Renderer::DisplayImguiMenu(Microsoft::WRL::ComPtr<ID3D12GraphicsComm
 				break;
 			}
 		}
-		ImGui::ListBox("Lights", &imguiLightIndex, light_list.data(), (int)light_list.size(), 6);
-		
+		ImGui::ListBox("_", &imguiLightIndex, light_list.data(), (int)light_list.size(), 6);
+
 		ImGui::Spacing();
 		ImGui::Text("Light Information");
 		if (currentLevel.uniqueLights.size() > 0)
@@ -347,12 +356,13 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime, const std::vector<FLOAT>& kb
 
 inline VOID Renderer::ReleaseLevelResources()
 {
+	// unmap resources
 	vertexView = { 0 };
 	indexView = { 0 };
 
 	D3D12_SAFE_RELEASE(vertexBuffer);
 	D3D12_SAFE_RELEASE(indexBuffer);
-	D3D12_SAFE_RELEASE(constantBufferScene);
+	D3D12_SAFE_RELEASE(constantBufferSceneResource);
 	D3D12_SAFE_RELEASE(structuredBufferAttributesResource);
 	D3D12_SAFE_RELEASE(structuredBufferInstanceResource);
 	D3D12_SAFE_RELEASE(structuredBufferLightResource);
@@ -425,10 +435,10 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			hr = LoadVertexData(device,
 				vertexBufferData, vertexBufferStride, vertexBufferSize,
 				vertexBuffer, vertexView);
-			if (FAILED(hr))
-			{
-				abort();
-			}
+			//if (FAILED(hr))
+			//{
+			//	abort();
+			//}
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
@@ -443,10 +453,10 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			hr = LoadIndexData(device,
 				indexBufferData, indexBufferFormat, indexBufferSize,
 				indexBuffer, indexView);
-			if (FAILED(hr))
-			{
-				abort();
-			}
+			//if (FAILED(hr))
+			//{
+			//	abort();
+			//}
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
@@ -459,19 +469,19 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
 			D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 			cbvsrvuavHeap, cbvDescriptorSize);
-		if (FAILED(hr))
-		{
-			abort();
-		}
+		//if (FAILED(hr))
+		//{
+		//	abort();
+		//}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		hr = CreateConstantBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 0,
-			1, sizeof(SCENE), constantBufferScene, cbvSceneHandle);
-		if (FAILED(hr))
-		{
-			//abort();
-		}
+			1, sizeof(SCENE), constantBufferSceneResource, cbvSceneHandle);
+		//if (FAILED(hr))
+		//{
+		//	abort();
+		//}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -479,10 +489,10 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		const UINT numAttributes = currentLevel.materials.GetMaterialCount();
 		hr = CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 1,
 			numAttributes, sizeof(H2B::ATTRIBUTES), structuredBufferAttributesResource, structuredBufferAttributeHandle);
-		if (FAILED(hr))
-		{
-			//abort();
-		}
+		//if (FAILED(hr))
+		//{
+		//	abort();
+		//}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -490,21 +500,21 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		const UINT numInstances = currentLevel.instanceData.size() + 1;
 		hr = CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 2,
 			numInstances, sizeof(GW::MATH::GMATRIXF), structuredBufferInstanceResource, structuredBufferInstanceHandle);
-		if (FAILED(hr))
-		{
-			//abort();
-		}
+		//if (FAILED(hr))
+		//{
+		//	abort();
+		//}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
-		
+
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// lighting information
 		const UINT numLights = currentLevel.uniqueLights.size();
 		hr = CreateStructuredBufferView(device, cbvsrvuavHeap, cbvDescriptorSize, 3,
 			numLights, sizeof(H2B::LIGHT), structuredBufferLightResource, structuredBufferLightHandle);
-		if (FAILED(hr))
-		{
+		//if (FAILED(hr))
+		//{
 			//abort();
-		}
+		//}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -530,9 +540,9 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		// Map all the necessary resources to a GPU address in order to copy data from the CPU
-		if (constantBufferScene)
+		if (constantBufferSceneResource)
 		{
-			hr = constantBufferScene->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&constantBufferSceneData));
+			hr = constantBufferSceneResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&constantBufferSceneData));
 		}
 		// attributes can be written to once since these will not change
 		if (structuredBufferAttributesResource)
@@ -775,10 +785,7 @@ inline HRESULT Renderer::LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device
 	DirectX::DDS_ALPHA_MODE alphaMode = DirectX::DDS_ALPHA_MODE::DDS_ALPHA_MODE_UNKNOWN;
 	hr = DirectX::LoadDDSTextureFromFile(device.Get(), filepath.c_str(), resource.ReleaseAndGetAddressOf(),
 		ddsData, subresources, 0Ui64, &alphaMode, &IsCubeMap);
-	if (FAILED(hr))
-	{
-		return hr;
-	}
+	if (FAILED(hr)) return hr;
 
 	D3D12_RESOURCE_DESC resourceDesc = resource->GetDesc();
 	CD3DX12_HEAP_PROPERTIES upload_prop = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -793,10 +800,7 @@ inline HRESULT Renderer::LoadTexture(Microsoft::WRL::ComPtr<ID3D12Device> device
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(upload.ReleaseAndGetAddressOf()));
-	if (FAILED(hr))
-	{
-		return hr;
-	}
+	if (FAILED(hr)) return hr;
 
 	// update the resource using the upload heap
 	UINT64 n = UpdateSubresources(cmd.Get(),
@@ -1050,12 +1054,14 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	std::string vertexShaders[] =
 	{
 		"../shaders/vertexshader.hlsl",
-		"../shaders/vertexshaderskybox.hlsl"
+		"../shaders/vertexshaderskybox.hlsl",
+		"../shaders/vertexshaderdebuglines.hlsl"
 	};
 	std::string pixelShaders[] =
 	{
 		"../shaders/pixelshader.hlsl",
-		"../shaders/pixelshaderskybox.hlsl"
+		"../shaders/pixelshaderskybox.hlsl",
+		"../shaders/pixelshaderdebuglines.hlsl"
 	};
 
 	// Create Vertex Shader
@@ -1149,8 +1155,6 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		std::cout << (char*)errors->GetBufferPointer() << std::endl;
 		abort();
 	}
-
-
 	device->CreateRootSignature(0, signature->GetBufferPointer(),
 		signature->GetBufferSize(), IID_PPV_ARGS(rootSignature.ReleaseAndGetAddressOf()));
 
@@ -1158,8 +1162,8 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psDesc = {};
 	psDesc.InputLayout = { format, ARRAYSIZE(format) };
 	psDesc.pRootSignature = rootSignature.Get();
-	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[0].Get());
-	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[0].Get());
+	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[SHADERS::DEFAULT].Get());
+	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[SHADERS::DEFAULT].Get());
 	psDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 	psDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
@@ -1176,8 +1180,8 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	}
 
 	// create pipeline state
-	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[1].Get());
-	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[1].Get());
+	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[SHADERS::SKYBOX].Get());
+	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[SHADERS::SKYBOX].Get());
 	psDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(pipelineSkybox.ReleaseAndGetAddressOf()));
 	if (FAILED(hr))
@@ -1188,7 +1192,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 
 	UINT descSize = 0;
 	hr = CreateHeap(device, 1,
-		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
 		D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		imguiSrvDescHeap, descSize);
 
@@ -1206,7 +1210,10 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		DXGI_FORMAT_R8G8B8A8_UNORM, imguiSrvDescHeap.Get(),
 		imguiSrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
 		imguiSrvDescHeap->GetGPUDescriptorHandleForHeapStart());
-	if (!success) abort();
+	if (!success)
+	{
+		abort();
+	}
 
 	// free temporary handle
 	device->Release();
@@ -1221,12 +1228,7 @@ Renderer::~Renderer()
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
-	// ComPtr will auto release so nothing to do here 
-	if (constantBufferScene)
-	{
-		constantBufferScene->Unmap(0, nullptr);
-	}
-
+	// ComPtr will auto release so nothing to do here
 	ReleaseLevelResources();
 
 	//ID3D12Device* device = nullptr;
@@ -1267,9 +1269,9 @@ VOID Renderer::Render()
 		cmd->SetGraphicsRootSignature(rootSignature.Get());
 		cmd->SetPipelineState(pipeline.Get());
 
-		if (constantBufferScene)
+		if (constantBufferSceneResource)
 		{
-			D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferScene->GetGPUVirtualAddress();// +0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
+			D3D12_GPU_VIRTUAL_ADDRESS cbvHandle = constantBufferSceneResource->GetGPUVirtualAddress();// +0U * (unsigned long long)CalculateConstantBufferByteSize(sizeof(SCENE));
 			cmd->SetGraphicsRootConstantBufferView(1, cbvHandle);
 		}
 		if (structuredBufferAttributesResource)
@@ -1288,15 +1290,15 @@ VOID Renderer::Render()
 			cmd->SetGraphicsRootShaderResourceView(4, srvLightHandle);
 		}
 		const UINT cubeMapOffset = 4;
-		const UINT colorTexturesOffset = 5;
-		const UINT normalTexturesOffset = colorTexturesOffset + MAX_COLOR_TEXTURES;
+		const UINT diffuseTexturesOffset = 5;
+		const UINT normalTexturesOffset = diffuseTexturesOffset + MAX_COLOR_TEXTURES;
 		const UINT specularTexturesOffset = normalTexturesOffset + MAX_NORMAL_TEXTURES;
 
 		if (currentLevel.textures.GetTextureColorCount() > 0)
 		{
 			CD3DX12_GPU_DESCRIPTOR_HANDLE cubemapSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), cubeMapOffset, cbvDescriptorSize);
 			cmd->SetGraphicsRootDescriptorTable(5, cubemapSrvHandle);
-			CD3DX12_GPU_DESCRIPTOR_HANDLE colorTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), colorTexturesOffset, cbvDescriptorSize);
+			CD3DX12_GPU_DESCRIPTOR_HANDLE colorTextureSrvHandle(cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart(), diffuseTexturesOffset, cbvDescriptorSize);
 			cmd->SetGraphicsRootDescriptorTable(6, colorTextureSrvHandle);
 		}
 
@@ -1400,29 +1402,29 @@ VOID Renderer::Update(FLOAT deltaTime)
 		textureBitMask = 0x00000006u;
 	}
 
-	auto& iter = currentLevel.uniqueMeshes.find("Character_Animated");
-	if (iter != currentLevel.uniqueMeshes.end())
-	{
-		GW::MATH::GMATRIXF& characterWorld = iter->second.matrices[0];
-		if (kbmState[G_KEY_UP])
-		{
-			GW::MATH::GVECTORF translation = { 0.0f, 0.0f, 1.0f * deltaTime, 0.0f };
-			matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
-		}
-		if (kbmState[G_KEY_DOWN])
-		{
-			GW::MATH::GVECTORF translation = { 0.0f, 0.0f, -1.0f * deltaTime, 0.0f };
-			matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
-		}
-		if (kbmState[G_KEY_LEFT])
-		{
-			matrixProxy.RotateYLocalF(characterWorld, deltaTime * -1.0f, characterWorld);
-		}
-		if (kbmState[G_KEY_RIGHT])
-		{
-			matrixProxy.RotateYLocalF(characterWorld, deltaTime * 1.0f, characterWorld);
-		}
-	}
+	//auto& iter = currentLevel.uniqueMeshes.find("Character_Animated");
+	//if (iter != currentLevel.uniqueMeshes.end())
+	//{
+	//	GW::MATH::GMATRIXF& characterWorld = iter->second.matrices[0];
+	//	if (kbmState[G_KEY_UP])
+	//	{
+	//		GW::MATH::GVECTORF translation = { 0.0f, 0.0f, 1.0f * deltaTime, 0.0f };
+	//		matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
+	//	}
+	//	if (kbmState[G_KEY_DOWN])
+	//	{
+	//		GW::MATH::GVECTORF translation = { 0.0f, 0.0f, -1.0f * deltaTime, 0.0f };
+	//		matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
+	//	}
+	//	if (kbmState[G_KEY_LEFT])
+	//	{
+	//		matrixProxy.RotateYLocalF(characterWorld, deltaTime * -1.0f, characterWorld);
+	//	}
+	//	if (kbmState[G_KEY_RIGHT])
+	//	{
+	//		matrixProxy.RotateYLocalF(characterWorld, deltaTime * 1.0f, characterWorld);
+	//	}
+	//}
 
 	GW::MATH::GVECTORF campos = worldCamera.row4;
 	campos.w = currentLevel.uniqueLights.size();
@@ -1438,9 +1440,11 @@ VOID Renderer::Update(FLOAT deltaTime)
 		currentLevel.FrustumCull();
 	}
 
-	if (constantBufferSceneData)
+	if (constantBufferSceneResource)
 	{
+		hr = constantBufferSceneResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&constantBufferSceneData));
 		memcpy(constantBufferSceneData, &scene, sizeof(SCENE));
+		constantBufferSceneResource->Unmap(0, nullptr);
 	}
 
 	if (structuredBufferInstanceResource)

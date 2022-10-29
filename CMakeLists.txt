@@ -33,11 +33,13 @@ if(WIN32)
 		# add vertex shader (.hlsl) files here
 		shaders/vertexshader.hlsl
 		shaders/vertexshaderskybox.hlsl
+		shaders/vertexshaderdebuglines.hlsl
 	)
 	set(PIXEL_SHADERS 
 		# add pixel shader (.hlsl) files here
 		shaders/pixelshader.hlsl
 		shaders/pixelshaderskybox.hlsl
+		shaders/pixelshaderdebuglines.hlsl
 	)
 	set(IMGUI
 		imgui/imconfig.h
@@ -70,7 +72,7 @@ if(WIN32)
 		VS_SHADER_MODEL 5.1 
 		VS_SHADER_ENTRYPOINT main
 		VS_SHADER_FLAGS /enable_unbounded_descriptor_tables
-		#VS_TOOL_OVERRIDE "None"
+		VS_TOOL_OVERRIDE "None"
 		#VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
 		#VS_SHADER_VARIABLE_NAME "%(Filename)"
 		#VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:true>
@@ -80,7 +82,7 @@ if(WIN32)
 		VS_SHADER_MODEL 5.1 
 		VS_SHADER_ENTRYPOINT main
 		VS_SHADER_FLAGS /enable_unbounded_descriptor_tables
-		#VS_TOOL_OVERRIDE "None"
+		VS_TOOL_OVERRIDE "None"
 		#VS_SHADER_OUTPUT_HEADER_FILE "%(RelativeDir)%(Filename).h"
 		#VS_SHADER_VARIABLE_NAME "%(Filename)"
 		#VS_SHADER_ENABLE_DEBUG $<$<CONFIG:Debug>:true>
