@@ -123,4 +123,9 @@ namespace H2B
 			aabb = { 0 };
 		}
 	};
+	struct COLORED_VERTEX
+	{
+		GW::MATH::GVECTORF position;
+		GW::MATH::GVECTORF color;
+	};
 }

@@ -26,6 +26,8 @@ if(WIN32)
 		source/texturemanager.cpp
 		source/frustum.h
 		source/frustum.cpp
+		source/debuglinesmanager.h
+		source/debuglinesmanager.cpp
 	)
 
 	# CMake FXC shader compilation, add any shaders you want compiled here

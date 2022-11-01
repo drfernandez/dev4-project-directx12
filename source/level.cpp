@@ -57,10 +57,10 @@ BOOL Level::LoadLevel(const std::string& filepath)
 
 void Level::FrustumCull()
 {
-	frustum.Create(G_DEGREE_TO_RADIAN_F(85.0f), aspectRatio, 0.1f, 1000.0f, camera);
 	culledUniqueMeshes.clear();
 
-	GW::MATH::GMATRIXF instanceMatrix = GW::MATH::GIdentityMatrixF;
+	frustum.Create(G_DEGREE_TO_RADIAN_F(85.0f), aspectRatio, 0.1f, 1000.0f, camera);
+
 	for (const auto& mesh : uniqueMeshes)
 	{
 		H2B::INSTANCED_MESH currentMesh = mesh.second;
@@ -70,9 +70,8 @@ void Level::FrustumCull()
 
 		for (const auto& matrix : mesh.second.matrices)
 		{
-			instanceMatrix = matrix;
-			GW::MATH::GVector::VectorXMatrixF(currentMesh.aabb.min, instanceMatrix, aabb.min);
-			GW::MATH::GVector::VectorXMatrixF(currentMesh.aabb.max, instanceMatrix, aabb.max);
+			GW::MATH::GVector::VectorXMatrixF(currentMesh.aabb.min, matrix, aabb.min);
+			GW::MATH::GVector::VectorXMatrixF(currentMesh.aabb.max, matrix, aabb.max);
 			if (frustum.CompareAABBToFrustum(aabb))
 			{
 				currentMesh.matrices.push_back(matrix);
@@ -94,8 +93,6 @@ void Level::FrustumCull()
 		culledInstanceData.insert(culledInstanceData.end(), mesh.second.matrices.begin(), mesh.second.matrices.end());
 		meshID = culledInstanceData.size();
 	}
-
-	int d = 0;
 }
 
 void Level::Clear()

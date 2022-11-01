@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <stdlib.h>
 #include "frustum.h"
+#include "debuglinesmanager.h"
 
 
 #define D3D12_SAFE_RELEASE(ptr) { if(ptr) { ptr->Release(); ptr = nullptr; } }	// releasing and setting to null (releases x2)
@@ -73,7 +74,6 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature>					rootSignature;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipeline;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipelineSkybox;
-	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipelineDebugLines;
 
 	UINT														cbvDescriptorSize;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				cbvsrvuavHeap;
@@ -109,10 +109,20 @@ private:
 
 	Level														currentLevel;
 
+	DebugLinesManager											currentDebugLines;
+
+	D3D12_VERTEX_BUFFER_VIEW									debugLinesVertexView;
+	D3D12_INDEX_BUFFER_VIEW										debugLinesIndexView;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						debugLinesVertexBuffer;
+	Microsoft::WRL::ComPtr<ID3D12Resource>						debugLinesIndexBuffer;
+
+	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipelineDebugLines;
+
+
+	// used by Dear ImGui
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>				imguiSrvDescHeap;
 	static LONG_PTR												gatewareWndProc;
 
-	// used by Dear ImGui
 	INT															imguiLightIndex;
 
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -292,11 +302,6 @@ inline VOID Renderer::UpdateCamera(FLOAT deltaTime, const std::vector<FLOAT>& kb
 	d3d.GetAspectRatio(aspect_ratio);
 	currentLevel.aspectRatio = aspect_ratio;
 
-	//for (UINT i = 0; i < 256U; i++)
-	//{
-	//	kbmProxy.GetState(i, kbmState[i]);
-	//	controllerProxy.GetState(0, i, controllerState[i]);
-	//}
 
 	GW::GReturn result = kbmProxy.GetMouseDelta(mouse_x_delta, mouse_y_delta);
 	bool move_up_changed = kbmState[G_KEY_SPACE] || controllerState[G_RIGHT_TRIGGER_AXIS];
@@ -402,6 +407,14 @@ inline VOID Renderer::ReleaseLevelResources()
 	structuredBufferAttributesData = nullptr;
 	structuredBufferInstanceData = nullptr;
 	structuredBufferLightData = nullptr;
+
+	// debuglines release
+	debugLinesVertexView = { 0 };
+	debugLinesIndexView = { 0 };
+
+	D3D12_SAFE_RELEASE(debugLinesVertexBuffer);
+	D3D12_SAFE_RELEASE(debugLinesIndexBuffer);
+
 }
 
 inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
@@ -543,6 +556,7 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 		if (constantBufferSceneResource)
 		{
 			hr = constantBufferSceneResource->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&constantBufferSceneData));
+			constantBufferSceneResource->Unmap(0, nullptr);
 		}
 		// attributes can be written to once since these will not change
 		if (structuredBufferAttributesResource)
