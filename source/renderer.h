@@ -80,19 +80,19 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						constantBufferSceneResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								cbvSceneHandle;
-	SCENE*														constantBufferSceneData;
+	SCENE* constantBufferSceneData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferAttributesResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferAttributeHandle;
-	H2B::ATTRIBUTES*											structuredBufferAttributesData;
+	H2B::ATTRIBUTES* structuredBufferAttributesData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferInstanceResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferInstanceHandle;
-	GW::MATH::GMATRIXF*											structuredBufferInstanceData;
+	GW::MATH::GMATRIXF* structuredBufferInstanceData;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource>						structuredBufferLightResource;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE								structuredBufferLightHandle;
-	H2B::LIGHT*													structuredBufferLightData;
+	H2B::LIGHT* structuredBufferLightData;
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuse;
 	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>			textureResourceDiffuseUpload;
@@ -1124,7 +1124,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 	};
 
 	CD3DX12_DESCRIPTOR_RANGE1 ranges[4] = {};
-	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV,  1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 2, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 3, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
@@ -1403,42 +1403,43 @@ VOID Renderer::Update(FLOAT deltaTime)
 	if (IsFocusWindow)
 	{
 		UpdateCamera(deltaTime, kbmState, controllerState);
-	}
 
-	bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
-	bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
-	if (textureOn)
-	{
-		textureBitMask = 0x00000000u;
-	}
-	else if (textureOff)
-	{
-		textureBitMask = 0x00000006u;
-	}
+		bool textureOn = kbmState[G_KEY_T] || controllerState[G_LEFT_SHOULDER_BTN];
+		bool textureOff = kbmState[G_KEY_Y] || controllerState[G_RIGHT_SHOULDER_BTN];
+		if (textureOn)
+		{
+			textureBitMask = 0x00000000u;
+		}
+		else if (textureOff)
+		{
+			textureBitMask = 0x00000006u;
+		}
 
-	//auto& iter = currentLevel.uniqueMeshes.find("Character_Animated");
-	//if (iter != currentLevel.uniqueMeshes.end())
-	//{
-	//	GW::MATH::GMATRIXF& characterWorld = iter->second.matrices[0];
-	//	if (kbmState[G_KEY_UP])
-	//	{
-	//		GW::MATH::GVECTORF translation = { 0.0f, 0.0f, 1.0f * deltaTime, 0.0f };
-	//		matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
-	//	}
-	//	if (kbmState[G_KEY_DOWN])
-	//	{
-	//		GW::MATH::GVECTORF translation = { 0.0f, 0.0f, -1.0f * deltaTime, 0.0f };
-	//		matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
-	//	}
-	//	if (kbmState[G_KEY_LEFT])
-	//	{
-	//		matrixProxy.RotateYLocalF(characterWorld, deltaTime * -1.0f, characterWorld);
-	//	}
-	//	if (kbmState[G_KEY_RIGHT])
-	//	{
-	//		matrixProxy.RotateYLocalF(characterWorld, deltaTime * 1.0f, characterWorld);
-	//	}
-	//}
+		auto& iter = currentLevel.uniqueMeshes.find("Character_Animated");
+		if (iter != currentLevel.uniqueMeshes.end())
+		{
+			GW::MATH::GMATRIXF& characterWorld = iter->second.matrices[0];
+			if (kbmState[G_KEY_UP])
+			{
+				GW::MATH::GVECTORF translation = { 0.0f, 0.0f, 1.0f * deltaTime, 0.0f };
+				matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
+			}
+			if (kbmState[G_KEY_DOWN])
+			{
+				GW::MATH::GVECTORF translation = { 0.0f, 0.0f, -1.0f * deltaTime, 0.0f };
+				matrixProxy.TranslateLocalF(characterWorld, translation, characterWorld);
+			}
+			if (kbmState[G_KEY_LEFT])
+			{
+				matrixProxy.RotateYLocalF(characterWorld, deltaTime * -1.0f, characterWorld);
+			}
+			if (kbmState[G_KEY_RIGHT])
+			{
+				matrixProxy.RotateYLocalF(characterWorld, deltaTime * 1.0f, characterWorld);
+			}
+		}
+
+	}
 
 	GW::MATH::GVECTORF campos = worldCamera.row4;
 	campos.w = currentLevel.uniqueLights.size();

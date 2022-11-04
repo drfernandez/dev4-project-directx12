@@ -79,6 +79,5 @@ float4 main(PS_IN input) : SV_TARGET
     float4 emissive = float4(material.Ke, 0.0f);
     float4 result = float4(luminance.xyz + ambient.xyz, 1.0f);
     
-    //return float4(surface.normal, 1.0f);
     return saturate((result * diffuse) + specular + emissive);
 }
