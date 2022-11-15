@@ -1,7 +1,7 @@
 
 struct VS_IN
 {
-    float3 pos : POSITION;
+    float4 pos : POSITION;
     float4 col : COLOR;
 };
 
@@ -24,7 +24,7 @@ ConstantBuffer<SCENE> SceneData : register(b1, space0);
 VS_OUT main(VS_IN input)
 {
     VS_OUT output = (VS_OUT) 0;
-    float4 p = float4(input.pos, 1);
+    float4 p = float4(input.pos.xyz, 1);
     p = mul(SceneData.view, p);
     p = mul(SceneData.projection, p);
     

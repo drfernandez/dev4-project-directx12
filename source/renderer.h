@@ -109,14 +109,15 @@ private:
 
 	Level														currentLevel;
 
-	DebugLinesManager											currentDebugLines;
+	BOOL														useDebugLines;
+	DebugLinesManager											debugLineManager;
 
 	D3D12_VERTEX_BUFFER_VIEW									debugLinesVertexView;
 	D3D12_INDEX_BUFFER_VIEW										debugLinesIndexView;
 	Microsoft::WRL::ComPtr<ID3D12Resource>						debugLinesVertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D12Resource>						debugLinesIndexBuffer;
 
-	Microsoft::WRL::ComPtr<ID3D12PipelineState>					pipelineDebugLines;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState>					debugLinesPipeline;
 
 
 	// used by Dear ImGui
@@ -409,6 +410,7 @@ inline VOID Renderer::ReleaseLevelResources()
 	structuredBufferLightData = nullptr;
 
 	// debuglines release
+	useDebugLines = FALSE;
 	debugLinesVertexView = { 0 };
 	debugLinesIndexView = { 0 };
 
@@ -579,6 +581,22 @@ inline BOOL Renderer::LoadLevelDataFromFile(const std::string& filename)
 			}
 		}
 		////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Debug Lines Buffer creation 
+		{
+			UINT debugBufferStride = sizeof(H2B::COLORED_VERTEX);
+			UINT debugBufferSize = debugBufferStride * debugLineManager.capacity();
+			void* debugBufferData = (void*)debugLineManager.data();
+			hr = LoadVertexData(device,
+				debugBufferData, 
+				debugBufferStride,
+				debugBufferSize,
+				debugLinesVertexBuffer,
+				debugLinesVertexView);
+		}
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	}
 
 	device->Release();
@@ -1123,6 +1141,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		{ "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
+
 	CD3DX12_DESCRIPTOR_RANGE1 ranges[4] = {};
 	ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 	ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, -1, 0, 1, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
@@ -1193,7 +1212,7 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		abort();
 	}
 
-	// create pipeline state
+	// create skybox pipeline state
 	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[SHADERS::SKYBOX].Get());
 	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[SHADERS::SKYBOX].Get());
 	psDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
@@ -1203,6 +1222,23 @@ Renderer::Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX12Surface _d3
 		abort();
 	}
 
+	// create debug lines pipeline state
+	D3D12_INPUT_ELEMENT_DESC lineFormat[] =
+	{
+		{ "POSITION",	0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "COLOR",		0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
+	psDesc.InputLayout = { lineFormat, ARRAYSIZE(lineFormat) };
+	psDesc.VS = CD3DX12_SHADER_BYTECODE(vsBlob[SHADERS::DEBUGLINES].Get());
+	psDesc.PS = CD3DX12_SHADER_BYTECODE(psBlob[SHADERS::DEBUGLINES].Get());
+	psDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+	hr = device->CreateGraphicsPipelineState(&psDesc, IID_PPV_ARGS(debugLinesPipeline.ReleaseAndGetAddressOf()));
+	if (FAILED(hr))
+	{
+		abort();
+	}
 
 	UINT descSize = 0;
 	hr = CreateHeap(device, 1,
@@ -1269,6 +1305,7 @@ VOID Renderer::Render()
 	d3d.GetDepthStencilView((void**)&dsv);
 	// setup the pipeline
 	cmd->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+
 
 	// if the currentlevel is loaded then process the level information
 	if (vertexView.BufferLocation && indexView.BufferLocation)
@@ -1373,6 +1410,16 @@ VOID Renderer::Render()
 				cmd->DrawIndexedInstanced(submesh.drawInfo.indexCount, mesh.second.numInstances, submesh.drawInfo.indexOffset, mesh.second.vertexOffset, 0);
 			}
 		}
+
+		if (useDebugLines)
+		{
+			cmd->SetPipelineState(debugLinesPipeline.Get());
+			cmd->IASetVertexBuffers(0, 1, &debugLinesVertexView);
+			cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+			cmd->DrawInstanced(debugLineManager.size(), 1, 0, 0);
+
+			debugLineManager.clear();
+		}
 	}
 
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> imguiHeaps[] = { imguiSrvDescHeap.Get() };
@@ -1439,6 +1486,14 @@ VOID Renderer::Update(FLOAT deltaTime)
 			}
 		}
 
+		if (kbmState[G_KEY_SEMICOLON])
+		{
+			useDebugLines = TRUE;
+		}
+		if (kbmState[G_KEY_PERIOD])
+		{
+			useDebugLines = FALSE;
+		}
 	}
 
 	GW::MATH::GVECTORF campos = worldCamera.row4;
@@ -1488,8 +1543,47 @@ VOID Renderer::Update(FLOAT deltaTime)
 			if (numLights > 0)
 			{
 				memcpy(structuredBufferLightData, currentLevel.uniqueLights.data(), sizeof(H2B::LIGHT) * numLights);
-				structuredBufferLightResource->Unmap(0, nullptr);
 			}
+			structuredBufferLightResource->Unmap(0, nullptr);
+		}
+	}
+
+	if (useDebugLines)
+	{
+		for (const auto& mesh : currentLevel.culledInstanceData)
+		{
+			H2B::COLORED_VERTEX start = { mesh.row4 };
+			GW::MATH::GVECTORF temp;
+			GW::MATH::GVECTORF direction;
+			direction = mesh.row1;
+			GW::MATH::GVector::NormalizeF(direction, direction);
+			GW::MATH::GVector::AddVectorF(start.position, direction, temp);
+			H2B::COLORED_VERTEX xend = { temp, { 1.0f, 0.0f, 0.0f, 1.0f } };
+			direction = mesh.row2;
+			GW::MATH::GVector::NormalizeF(direction, direction);
+			GW::MATH::GVector::AddVectorF(start.position, direction, temp);
+			H2B::COLORED_VERTEX yend = { temp, { 0.0f, 1.0f, 0.0f, 1.0f } };
+			direction = mesh.row3;
+			GW::MATH::GVector::NormalizeF(direction, direction);
+			GW::MATH::GVector::AddVectorF(start.position, direction, temp);
+			H2B::COLORED_VERTEX zend = { temp, { 0.0f, 0.0f, 1.0f, 0.0f } };
+			debugLineManager.AddLine(start.position, xend.position, xend.color);
+			debugLineManager.AddLine(start.position, yend.position, yend.color);
+			debugLineManager.AddLine(start.position, zend.position, zend.color);
+		}
+	}
+
+	if (debugLinesVertexBuffer)
+	{
+		UINT* debugLinesData = nullptr;
+		hr = debugLinesVertexBuffer->Map(0, &CD3DX12_RANGE(0, 0), reinterpret_cast<void**>(&debugLinesData));
+		if (SUCCEEDED(hr))
+		{
+			if (debugLineManager.size() > 0)
+			{
+				memcpy(debugLinesData, debugLineManager.data(), sizeof(H2B::COLORED_VERTEX) * debugLineManager.size());
+			}
+			debugLinesVertexBuffer->Unmap(0, nullptr);
 		}
 	}
 
