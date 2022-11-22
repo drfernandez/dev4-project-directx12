@@ -41,6 +41,7 @@ StructuredBuffer<LIGHT> LightData : register(t2, space0);
 VS_OUT main(VS_IN input, uint id : SV_InstanceID)
 {    
     float4 p = float4(input.pos, 1.0f);
+    matrix vp = mul(SceneData.projection, SceneData.view);
     float2 u = input.uvw.xy;
     float3 n = input.nrm;
     float3 wp = float3(0, 0, 0);
@@ -48,8 +49,7 @@ VS_OUT main(VS_IN input, uint id : SV_InstanceID)
     
     p = mul(w, p);
     wp = p.xyz;
-    p = mul(SceneData.view, p);
-    p = mul(SceneData.projection, p);
+    p = mul(vp, p);
     n = mul(w, float4(n, 0.0f)).xyz;
     
     VS_OUT output = { p, u, n, wp };    
