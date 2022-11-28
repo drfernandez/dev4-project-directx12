@@ -33,6 +33,7 @@ int main()
 
 		if (+d3d12.Create(win, GW::GRAPHICS::DEPTH_BUFFER_SUPPORT))
 		{
+
 			Renderer renderer(win, d3d12); // init
 			while (+win.ProcessWindowEvents())
 			{
