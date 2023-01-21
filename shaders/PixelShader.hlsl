@@ -60,7 +60,7 @@ float4 main(PS_IN input) : SV_TARGET
 
     if (MeshData.has_texture & SPECULAR_FLAG)
     {
-        HasSpecular = specular_texture[MeshData.specular_id].Sample(filter, input.uv).x;
+        HasSpecular = (int)specular_texture[MeshData.specular_id].Sample(filter, input.uv).x;
     }
     
     float4 luminance = float4(0.0f, 0.0f, 0.0f, 0.0f);
