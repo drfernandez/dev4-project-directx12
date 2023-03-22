@@ -60,7 +60,7 @@ float4 main(PS_IN input) : SV_TARGET
 
     if (MeshData.has_texture & SPECULAR_FLAG)
     {
-        HasSpecular = (int)specular_texture[MeshData.specular_id].Sample(filter, input.uv).x;
+        HasSpecular = specular_texture[MeshData.specular_id].Sample(filter, input.uv).x;
     }
     
     float4 luminance = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -79,5 +79,5 @@ float4 main(PS_IN input) : SV_TARGET
     float4 emissive = float4(material.Ke, 0.0f);
     float4 result = float4(luminance.xyz + ambient.xyz, 1.0f);
     
-    return saturate((result * diffuse) + specular + emissive);
+    return saturate((result * diffuse)) + specular + emissive;
 }
