@@ -366,17 +366,17 @@ inline VOID Renderer::ReleaseLevelResources()
 	vertexView = { 0 };
 	indexView = { 0 };
 
-	D3D12_SAFE_RELEASE(vertexBuffer);
-	D3D12_SAFE_RELEASE(indexBuffer);
-	D3D12_SAFE_RELEASE(constantBufferSceneResource);
-	D3D12_SAFE_RELEASE(structuredBufferAttributesResource);
-	D3D12_SAFE_RELEASE(structuredBufferInstanceResource);
-	D3D12_SAFE_RELEASE(structuredBufferLightResource);
+	D3D12_COMPTR_SAFE_RELEASE(vertexBuffer);
+	D3D12_COMPTR_SAFE_RELEASE(indexBuffer);
+	D3D12_COMPTR_SAFE_RELEASE(constantBufferSceneResource);
+	D3D12_COMPTR_SAFE_RELEASE(structuredBufferAttributesResource);
+	D3D12_COMPTR_SAFE_RELEASE(structuredBufferInstanceResource);
+	D3D12_COMPTR_SAFE_RELEASE(structuredBufferLightResource);
 	UINT resourceSize = textureResourceDiffuse.size();
 	for (UINT i = 0; i < resourceSize; i++)
 	{
-		D3D12_SAFE_RELEASE(textureResourceDiffuse[i]);
-		D3D12_SAFE_RELEASE(textureResourceDiffuseUpload[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceDiffuse[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceDiffuseUpload[i]);
 	}
 	textureResourceDiffuse.clear();
 	textureResourceDiffuseUpload.clear();
@@ -384,8 +384,8 @@ inline VOID Renderer::ReleaseLevelResources()
 	resourceSize = textureResourceNormal.size();
 	for (UINT i = 0; i < resourceSize; i++)
 	{
-		D3D12_SAFE_RELEASE(textureResourceNormal[i]);
-		D3D12_SAFE_RELEASE(textureResourceNormalUpload[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceNormal[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceNormalUpload[i]);
 	}
 	textureResourceNormal.clear();
 	textureResourceNormalUpload.clear();
@@ -393,16 +393,16 @@ inline VOID Renderer::ReleaseLevelResources()
 	resourceSize = textureResourceSpecular.size();
 	for (UINT i = 0; i < resourceSize; i++)
 	{
-		D3D12_SAFE_RELEASE(textureResourceSpecular[i]);
-		D3D12_SAFE_RELEASE(textureResourceSpecularUpload[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceSpecular[i]);
+		D3D12_COMPTR_SAFE_RELEASE(textureResourceSpecularUpload[i]);
 	}
 	textureResourceSpecular.clear();
 	textureResourceSpecularUpload.clear();
 
-	D3D12_SAFE_RELEASE(textureResourceDefault2D);
-	D3D12_SAFE_RELEASE(textureResourceDefault2DUpload);
-	D3D12_SAFE_RELEASE(textureResourceDefault3D);
-	D3D12_SAFE_RELEASE(textureResourceDefault3DUpload);
+	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault2D);
+	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault2DUpload);
+	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault3D);
+	D3D12_COMPTR_SAFE_RELEASE(textureResourceDefault3DUpload);
 
 	constantBufferSceneData = nullptr;
 	structuredBufferAttributesData = nullptr;
@@ -414,8 +414,8 @@ inline VOID Renderer::ReleaseLevelResources()
 	debugLinesVertexView = { 0 };
 	debugLinesIndexView = { 0 };
 
-	D3D12_SAFE_RELEASE(debugLinesVertexBuffer);
-	D3D12_SAFE_RELEASE(debugLinesIndexBuffer);
+	D3D12_COMPTR_SAFE_RELEASE(debugLinesVertexBuffer);
+	D3D12_COMPTR_SAFE_RELEASE(debugLinesIndexBuffer);
 
 }
 
