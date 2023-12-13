@@ -906,12 +906,7 @@ inline HRESULT Renderer::LoadLevelTextures(Microsoft::WRL::ComPtr<ID3D12Device> 
 		for (UINT i = 0; i < numTexturesColor; i++)
 		{
 			std::string current_name = "../textures/" + names[i].substr(0, names[i].size() - 3) + "dds";
-
-			//setup converter
-			using convert_type = std::codecvt_utf8<wchar_t>;
-			std::wstring_convert<convert_type, wchar_t> converter;
-			//use converter (.to_bytes: wstr->str, .from_bytes: str->wstr)
-			std::wstring wide_string = converter.from_bytes(current_name);
+			std::wstring wide_string(current_name.begin(), current_name.end());
 
 			hr = LoadTexture(device, cmd, textureResourceDiffuse[i], textureResourceDiffuseUpload[i], wide_string, IsCubeMap[i]);
 			if (SUCCEEDED(hr))
